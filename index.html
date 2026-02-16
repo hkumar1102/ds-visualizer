@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="dark light">
+    <title>DSA Visualizer Infinity - Professional Algorithm Visualization</title>
+    <meta name="description" content="Professional-grade data structures and algorithms visualizer for learning and interview preparation">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <svg class="logo-icon" width="32" height="32" viewBox="0 0 32 32" fill="none">
+                <rect x="2" y="2" width="28" height="28" rx="6" stroke="currentColor" stroke-width="2"/>
+                <path d="M16 8L24 16L16 24L8 16L16 8Z" fill="currentColor" opacity="0.5"/>
+            </svg>
+            <span class="brand-text">DSA Visualizer Infinity</span>
+            <span class="badge">Pro</span>
+        </div>
+        
+        <div class="navbar-controls">
+            <div class="control-group">
+                <label>Category</label>
+                <select id="categorySelector" class="select-control">
+                    <option value="sorting">Sorting</option>
+                    <option value="searching">Searching</option>
+                    <option value="graphs">Graphs</option>
+                    <option value="trees">Trees</option>
+                    <option value="dp">Dynamic Programming</option>
+                    <option value="strings">String Algorithms</option>
+                    <option value="geometry">Computational Geometry</option>
+                    <option value="advanced">Advanced / NP</option>
+                </select>
+            </div>
+            
+            <div class="control-group">
+                <label>Size: <span id="sizeValue">50</span></label>
+                <input type="range" id="sizeSlider" min="10" max="200" value="50" class="slider">
+            </div>
+            
+            <div class="control-group">
+                <label>Speed: <span id="speedValue">50</span></label>
+                <input type="range" id="speedSlider" min="1" max="100" value="50" class="slider">
+            </div>
+        </div>
+        
+        <div class="navbar-actions">
+            <button id="generateBtn" class="btn btn-secondary">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M14 8C14 4.68629 11.3137 2 8 2C4.68629 2 2 4.68629 2 8C2 11.3137 4.68629 14 8 14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M14 8V4M14 8H10M14 8L10 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Generate
+            </button>
+            <button id="startBtn" class="btn btn-primary">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M4 2L12 8L4 14V2Z" fill="currentColor"/>
+                </svg>
+                Start
+            </button>
+            <button id="pauseBtn" class="btn btn-secondary" disabled>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <rect x="4" y="2" width="3" height="12" fill="currentColor"/>
+                    <rect x="9" y="2" width="3" height="12" fill="currentColor"/>
+                </svg>
+                Pause
+            </button>
+            <button id="stepBtn" class="btn btn-secondary">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M4 2L10 8L4 14V2Z" fill="currentColor"/>
+                    <rect x="11" y="2" width="2" height="12" fill="currentColor"/>
+                </svg>
+                Step
+            </button>
+            <button id="resetBtn" class="btn btn-danger">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                    <path d="M2 8C2 4.68629 4.68629 2 8 2C11.3137 2 14 4.68629 14 8C14 11.3137 11.3137 14 8 14C5.79086 14 3.82427 12.7931 2.75736 11" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M2 11V7M2 11H6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Reset
+            </button>
+            <button id="selfTestBtn" class="btn btn-secondary" type="button">
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M8 1L14 3V7.5C14 11.4 11.2 14.9 8 15C4.8 14.9 2 11.4 2 7.5V3L8 1Z" stroke="currentColor" stroke-width="1.5"/>
+                    <path d="M5.2 8.1L7 10L10.8 6.2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Self Test
+            </button>
+            
+            <div class="divider"></div>
+            
+            <button
+                id="themeToggle"
+                class="btn btn-icon"
+                title="Toggle Theme"
+                aria-label="Toggle theme"
+                aria-pressed="false"
+                type="button"
+            >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <circle cx="10" cy="10" r="4" stroke="currentColor" stroke-width="2"/>
+                    <path d="M10 2V4M10 16V18M18 10H16M4 10H2M15.5 4.5L14 6M6 14L4.5 15.5M15.5 15.5L14 14M6 6L4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+            </button>
+            
+            <button
+                id="soundToggle"
+                class="btn btn-icon active"
+                title="Toggle Sound"
+                aria-label="Toggle sound"
+                aria-pressed="true"
+                type="button"
+            >
+                <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <path d="M8 6L4 9H2V11H4L8 14V6Z" fill="currentColor"/>
+                    <path d="M12 7C13 8 13 10 12 11M14 5C16 7 16 13 14 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                </svg>
+            </button>
+            
+            <button
+                id="modeToggle"
+                class="btn btn-toggle"
+                title="Toggle Interview Mode"
+                aria-label="Toggle interview mode"
+                aria-pressed="false"
+                type="button"
+            >
+                <span class="toggle-label">Beginner</span>
+                <div class="toggle-switch"></div>
+            </button>
+            
+            <button
+                id="qualityToggle"
+                class="btn btn-toggle active"
+                title="Animation Quality"
+                aria-label="Toggle animation quality"
+                aria-pressed="true"
+                type="button"
+            >
+                <span class="toggle-label">High</span>
+                <div class="toggle-switch"></div>
+            </button>
+        </div>
+    </nav>
+    
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h3>Algorithms</h3>
+                <button
+                    id="sidebarToggle"
+                    class="btn btn-icon"
+                    aria-label="Toggle algorithm sidebar"
+                    aria-expanded="true"
+                    type="button"
+                >
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M3 5H17M3 10H17M3 15H17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="sidebar-search">
+                <div class="search-row">
+                    <input
+                        id="algoSearch"
+                        class="search-control"
+                        type="search"
+                        placeholder="Search algorithms..."
+                        aria-label="Search algorithms"
+                        autocomplete="off"
+                    >
+                    <button
+                        id="clearAlgoSearch"
+                        class="btn btn-icon search-clear hidden"
+                        aria-label="Clear algorithm search"
+                        title="Clear search"
+                        type="button"
+                    >
+                        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                            <path d="M3 3L11 11M11 3L3 11" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                </div>
+                <p id="algoSearchMeta" class="search-meta" aria-live="polite">Showing all algorithms in this category</p>
+            </div>
+            
+            <div class="sidebar-content">
+                <!-- Sorting Algorithms -->
+                <div class="algo-category" data-category="sorting">
+                    <h4 class="category-title">Sorting Algorithms</h4>
+                    <div class="algo-list">
+                        <button class="algo-btn active" data-algo="bubble">Bubble Sort</button>
+                        <button class="algo-btn" data-algo="selection">Selection Sort</button>
+                        <button class="algo-btn" data-algo="insertion">Insertion Sort</button>
+                        <button class="algo-btn" data-algo="merge">Merge Sort</button>
+                        <button class="algo-btn" data-algo="quick">Quick Sort</button>
+                        <button class="algo-btn" data-algo="heap">Heap Sort</button>
+                        <button class="algo-btn" data-algo="counting">Counting Sort</button>
+                        <button class="algo-btn" data-algo="radix">Radix Sort</button>
+                        <button class="algo-btn" data-algo="shell">Shell Sort</button>
+                        <button class="algo-btn" data-algo="timsort">TimSort</button>
+                        <button class="algo-btn" data-algo="cocktail">Cocktail Shaker Sort</button>
+                        <button class="algo-btn" data-algo="bucket">Bucket Sort</button>
+                    </div>
+                </div>
+                
+                <!-- Searching Algorithms -->
+                <div class="algo-category hidden" data-category="searching">
+                    <h4 class="category-title">Searching Algorithms</h4>
+                    <div class="algo-list">
+                        <button class="algo-btn" data-algo="linear">Linear Search</button>
+                        <button class="algo-btn" data-algo="binary">Binary Search</button>
+                        <button class="algo-btn" data-algo="jump">Jump Search</button>
+                        <button class="algo-btn" data-algo="exponential">Exponential Search</button>
+                        <button class="algo-btn" data-algo="interpolation">Interpolation Search</button>
+                        <button class="algo-btn" data-algo="ternary">Ternary Search</button>
+                        <button class="algo-btn" data-algo="fibsearch">Fibonacci Search</button>
+                    </div>
+                </div>
+                
+                <!-- Graph Algorithms -->
+                <div class="algo-category hidden" data-category="graphs">
+                    <h4 class="category-title">Graph Algorithms</h4>
+                    <div class="algo-list">
+                        <button class="algo-btn" data-algo="bfs">Breadth-First Search</button>
+                        <button class="algo-btn" data-algo="dfs">Depth-First Search</button>
+                        <button class="algo-btn" data-algo="dijkstra">Dijkstra's Algorithm</button>
+                        <button class="algo-btn" data-algo="astar">A* Pathfinding</button>
+                        <button class="algo-btn" data-algo="bellman">Bellman-Ford</button>
+                        <button class="algo-btn" data-algo="floyd">Floyd-Warshall</button>
+                        <button class="algo-btn" data-algo="kruskal">Kruskal's MST</button>
+                        <button class="algo-btn" data-algo="prim">Prim's MST</button>
+                        <button class="algo-btn" data-algo="topo">Topological Sort</button>
+                        <button class="algo-btn" data-algo="unionfind">Union-Find</button>
+                        <button class="algo-btn" data-algo="bidibfs">Bidirectional BFS</button>
+                        <button class="algo-btn" data-algo="components">Connected Components</button>
+                    </div>
+                </div>
+                
+                <!-- Tree Algorithms -->
+                <div class="algo-category hidden" data-category="trees">
+                    <h4 class="category-title">Tree Structures</h4>
+                    <div class="algo-list">
+                        <button class="algo-btn" data-algo="bst">Binary Search Tree</button>
+                        <button class="algo-btn" data-algo="avl">AVL Tree</button>
+                        <button class="algo-btn" data-algo="heaptree">Heap Tree</button>
+                        <button class="algo-btn" data-algo="trie">Trie</button>
+                        <button class="algo-btn" data-algo="inorder">Inorder Traversal</button>
+                        <button class="algo-btn" data-algo="preorder">Preorder Traversal</button>
+                        <button class="algo-btn" data-algo="postorder">Postorder Traversal</button>
+                        <button class="algo-btn" data-algo="levelorder">Level Order Traversal</button>
+                    </div>
+                </div>
+                
+                <!-- Dynamic Programming -->
+                <div class="algo-category hidden" data-category="dp">
+                    <h4 class="category-title">Dynamic Programming</h4>
+                    <div class="algo-list">
+                        <button class="algo-btn" data-algo="fibonacci">Fibonacci</button>
+                        <button class="algo-btn" data-algo="knapsack">0/1 Knapsack</button>
+                        <button class="algo-btn" data-algo="lcs">Longest Common Subsequence</button>
+                        <button class="algo-btn" data-algo="editdist">Edit Distance</button>
+                        <button class="algo-btn" data-algo="matrixchain">Matrix Chain Multiplication</button>
+                        <button class="algo-btn" data-algo="coinchange">Coin Change (Min Coins)</button>
+                        <button class="algo-btn" data-algo="lis">Longest Increasing Subsequence</button>
+                    </div>
+                </div>
+                
+                <!-- String Algorithms -->
+                <div class="algo-category hidden" data-category="strings">
+                    <h4 class="category-title">String Algorithms</h4>
+                    <div class="algo-list">
+                        <button class="algo-btn" data-algo="kmp">KMP Pattern Matching</button>
+                        <button class="algo-btn" data-algo="rabinkarp">Rabin-Karp</button>
+                        <button class="algo-btn" data-algo="triesearch">Trie Search</button>
+                        <button class="algo-btn" data-algo="zalgo">Z Algorithm</button>
+                        <button class="algo-btn" data-algo="boyermoore">Boyer-Moore (Bad Character)</button>
+                    </div>
+                </div>
+                
+                <!-- Computational Geometry -->
+                <div class="algo-category hidden" data-category="geometry">
+                    <h4 class="category-title">Computational Geometry</h4>
+                    <div class="algo-list">
+                        <button class="algo-btn" data-algo="convexhull">Convex Hull (Graham Scan)</button>
+                        <button class="algo-btn" data-algo="lineintersect">Line Intersection</button>
+                        <button class="algo-btn" data-algo="closestpair">Closest Pair of Points</button>
+                    </div>
+                </div>
+                
+                <!-- Advanced / NP -->
+                <div class="algo-category hidden" data-category="advanced">
+                    <h4 class="category-title">Advanced / NP Problems</h4>
+                    <div class="algo-list">
+                        <button class="algo-btn" data-algo="tsp">Traveling Salesman (Heuristic)</button>
+                        <button class="algo-btn" data-algo="graphcolor">Graph Coloring</button>
+                        <button class="algo-btn" data-algo="nqueens">N-Queens</button>
+                        <button class="algo-btn" data-algo="subsetsum">Subset Sum</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Comparison Mode -->
+            <div class="sidebar-footer">
+                <button id="comparisonBtn" class="btn btn-secondary btn-block">
+                    <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <rect x="1" y="3" width="6" height="10" stroke="currentColor" stroke-width="1.5"/>
+                        <rect x="9" y="3" width="6" height="10" stroke="currentColor" stroke-width="1.5"/>
+                    </svg>
+                    Comparison Mode
+                </button>
+            </div>
+        </aside>
+        
+        <!-- Main Content Area -->
+        <main class="content">
+            <!-- Analytics Dashboard -->
+            <div class="analytics-bar">
+                <div class="metric">
+                    <span class="metric-label">Comparisons</span>
+                    <span class="metric-value" id="comparisons">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Swaps</span>
+                    <span class="metric-value" id="swaps">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Operations</span>
+                    <span class="metric-value" id="operations">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Array Accesses</span>
+                    <span class="metric-value" id="accesses">0</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Time</span>
+                    <span class="metric-value" id="executionTime">0ms</span>
+                </div>
+                <div class="metric">
+                    <span class="metric-label">Complexity</span>
+                    <span class="metric-value complexity" id="complexity">O(n^2)</span>
+                </div>
+            </div>
+            
+            <!-- Visualization Canvas -->
+            <div class="visualization-container">
+                <canvas id="visualizationCanvas"></canvas>
+                <div id="graphContainer" class="graph-container hidden"></div>
+                <div id="treeContainer" class="tree-container hidden"></div>
+                <div id="dpTable" class="dp-table hidden"></div>
+            </div>
+            
+            <!-- Graph Editor Tools -->
+            <div id="graphTools" class="graph-tools hidden">
+                <button id="addNodeBtn" class="btn btn-secondary">Add Node</button>
+                <button id="addEdgeBtn" class="btn btn-secondary">Add Edge</button>
+                <button id="removeNodeBtn" class="btn btn-danger">Remove Node</button>
+                <button id="clearGraphBtn" class="btn btn-danger">Clear Graph</button>
+                <label>
+                    <input type="checkbox" id="directedGraph">
+                    Directed Graph
+                </label>
+                <label>
+                    <input type="checkbox" id="weightedGraph">
+                    Weighted
+                </label>
+            </div>
+            
+            <!-- Current Step Indicator -->
+            <div class="step-indicator" id="stepIndicator">
+                <div class="step-progress">
+                    <div class="step-progress-bar" id="stepProgress"></div>
+                </div>
+                <p class="step-text" id="stepText" role="status" aria-live="polite">Ready to visualize</p>
+            </div>
+        </main>
+        
+        <!-- Right Panel - Learning System -->
+        <aside class="right-panel" id="rightPanel">
+            <div class="panel-header">
+                <h3>Learning Center</h3>
+                <button
+                    id="panelToggle"
+                    class="btn btn-icon"
+                    aria-label="Toggle learning panel"
+                    aria-expanded="true"
+                    type="button"
+                >
+                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                        <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+            
+            <div class="panel-tabs">
+                <button class="tab-btn active" data-tab="overview">Overview</button>
+                <button class="tab-btn" data-tab="complexity">Complexity</button>
+                <button class="tab-btn" data-tab="code">Code</button>
+                <button class="tab-btn" data-tab="quiz">Quiz</button>
+                <button class="tab-btn" data-tab="tests">Tests</button>
+            </div>
+            
+            <div class="panel-content">
+                <!-- Overview Tab -->
+                <div class="tab-content active" data-tab="overview">
+                    <h4 id="algoTitle">Bubble Sort</h4>
+                    <div id="algoMeta" class="algo-meta"></div>
+                    <p id="algoDescription">
+                        Bubble Sort is a simple sorting algorithm that repeatedly steps through the list,
+                        compares adjacent elements and swaps them if they are in the wrong order.
+                        The pass through the list is repeated until the list is sorted.
+                    </p>
+                    
+                    <div class="info-card">
+                        <h5>How it works:</h5>
+                        <ol id="algoSteps">
+                            <li>Compare adjacent elements</li>
+                            <li>Swap if they are in wrong order</li>
+                            <li>Repeat for all elements</li>
+                            <li>Continue until no swaps needed</li>
+                        </ol>
+                    </div>
+                    
+                    <div class="info-card">
+                        <h5>Use Cases:</h5>
+                        <ul id="algoUseCases">
+                            <li>Educational purposes</li>
+                            <li>Small datasets</li>
+                            <li>Nearly sorted data</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Complexity Tab -->
+                <div class="tab-content" data-tab="complexity">
+                    <h4>Time & Space Complexity</h4>
+                    
+                    <div class="complexity-grid">
+                        <div class="complexity-item">
+                            <span class="complexity-label">Best Case</span>
+                            <span class="complexity-value" id="bestCase">O(n)</span>
+                        </div>
+                        <div class="complexity-item">
+                            <span class="complexity-label">Average Case</span>
+                            <span class="complexity-value" id="avgCase">O(n^2)</span>
+                        </div>
+                        <div class="complexity-item">
+                            <span class="complexity-label">Worst Case</span>
+                            <span class="complexity-value" id="worstCase">O(n^2)</span>
+                        </div>
+                        <div class="complexity-item">
+                            <span class="complexity-label">Space Complexity</span>
+                            <span class="complexity-value" id="spaceCase">O(1)</span>
+                        </div>
+                    </div>
+                    
+                    <div class="info-card">
+                        <h5>Performance Characteristics:</h5>
+                        <ul id="perfChar">
+                            <li><strong>Stability:</strong> Stable</li>
+                            <li><strong>In-Place:</strong> Yes</li>
+                            <li><strong>Adaptive:</strong> Yes</li>
+                            <li><strong>Online:</strong> No</li>
+                        </ul>
+                    </div>
+                    
+                    <div class="info-card">
+                        <h5>Edge Cases:</h5>
+                        <ul id="edgeCases">
+                            <li>Already sorted array</li>
+                            <li>Reverse sorted array</li>
+                            <li>Array with duplicates</li>
+                            <li>Single element array</li>
+                        </ul>
+                    </div>
+                </div>
+                
+                <!-- Code Tab -->
+                <div class="tab-content" data-tab="code">
+                    <h4>Implementation</h4>
+                    
+                    <div class="code-header">
+                        <span>JavaScript</span>
+                        <button id="copyCodeBtn" class="btn btn-secondary btn-sm">
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                                <rect x="4" y="4" width="8" height="8" stroke="currentColor" stroke-width="1.5"/>
+                                <path d="M2 10V2H10" stroke="currentColor" stroke-width="1.5"/>
+                            </svg>
+                            Copy
+                        </button>
+                    </div>
+                    
+                    <pre class="code-block"><code id="codeImplementation">function bubbleSort(arr) {
+    const n = arr.length;
+    
+    for (let i = 0; i < n - 1; i++) {
+        let swapped = false;
+        
+        for (let j = 0; j < n - i - 1; j++) {
+            if (arr[j] > arr[j + 1]) {
+                [arr[j], arr[j + 1]] = [arr[j + 1], arr[j]];
+                swapped = true;
+            }
+        }
+        
+        if (!swapped) break;
+    }
+    
+    return arr;
+}</code></pre>
+                    
+                    <h5>Pseudocode</h5>
+                    <pre class="pseudocode" id="pseudocode">procedure bubbleSort(A: list of sortable items)
+    n = length(A)
+    for i = 0 to n-1 do
+        swapped = false
+        for j = 0 to n-i-2 do
+            if A[j] > A[j+1] then
+                swap(A[j], A[j+1])
+                swapped = true
+            end if
+        end for
+        if not swapped then
+            break
+        end if
+    end for
+end procedure</pre>
+                </div>
+                
+                <!-- Quiz Tab -->
+                <div class="tab-content" data-tab="quiz">
+                    <h4>Test Your Knowledge</h4>
+                    
+                    <div id="quizContainer">
+                        <div class="quiz-question">
+                            <p id="quizQuestion">What is the best-case time complexity of Bubble Sort?</p>
+                            <div class="quiz-options">
+                                <button class="quiz-option" data-answer="0">O(n)</button>
+                                <button class="quiz-option" data-answer="1">O(n log n)</button>
+                                <button class="quiz-option" data-answer="2">O(n^2)</button>
+                                <button class="quiz-option" data-answer="3">O(2^n)</button>
+                            </div>
+                        </div>
+                        
+                        <div id="quizFeedback" class="quiz-feedback hidden"></div>
+                        
+                        <button id="nextQuizBtn" class="btn btn-primary btn-block hidden">Next Question</button>
+                    </div>
+                    
+                    <div class="quiz-stats">
+                        <div class="stat">
+                            <span>Correct</span>
+                            <strong id="quizCorrect">0</strong>
+                        </div>
+                        <div class="stat">
+                            <span>Attempted</span>
+                            <strong id="quizAttempted">0</strong>
+                        </div>
+                        <div class="stat">
+                            <span>Accuracy</span>
+                            <strong id="quizAccuracy">0%</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Self-Test Tab -->
+                <div class="tab-content" data-tab="tests">
+                    <h4>Validation Lab</h4>
+                    <p>
+                        Run deterministic correctness checks across sorting, searching, graphs, DP,
+                        strings, geometry, and advanced algorithms.
+                    </p>
+
+                    <button id="selfTestRunBtn" class="btn btn-primary btn-block" type="button">
+                        Run Full Self-Test Suite
+                    </button>
+
+                    <div id="selfTestStatus" class="self-test-status idle">
+                        Idle. Run tests to verify algorithm integrity.
+                    </div>
+
+                    <div class="self-test-summary">
+                        <div class="self-test-card">
+                            <span>Passed</span>
+                            <strong id="selfTestPass">0</strong>
+                        </div>
+                        <div class="self-test-card">
+                            <span>Failed</span>
+                            <strong id="selfTestFail">0</strong>
+                        </div>
+                        <div class="self-test-card">
+                            <span>Time</span>
+                            <strong id="selfTestTime">0ms</strong>
+                        </div>
+                    </div>
+
+                    <ul id="selfTestResults" class="self-test-results">
+                        <li class="self-test-item neutral">
+                            <span class="self-test-name">Suite not run yet</span>
+                            <span class="self-test-detail">No checks executed.</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </aside>
+    </div>
+    
+    <!-- Comparison Modal -->
+    <div id="comparisonModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="comparisonTitle">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="comparisonTitle">Algorithm Comparison</h3>
+                <button class="modal-close" aria-label="Close comparison modal" type="button">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="comparison-selectors">
+                    <div class="selector-group">
+                        <label>Algorithm 1</label>
+                        <select id="algo1Select" class="select-control">
+                            <option value="bubble">Bubble Sort</option>
+                            <option value="selection">Selection Sort</option>
+                            <option value="insertion">Insertion Sort</option>
+                            <option value="merge">Merge Sort</option>
+                            <option value="quick">Quick Sort</option>
+                            <option value="heap">Heap Sort</option>
+                            <option value="counting">Counting Sort</option>
+                            <option value="radix">Radix Sort</option>
+                            <option value="shell">Shell Sort</option>
+                            <option value="timsort">TimSort</option>
+                            <option value="cocktail">Cocktail Shaker Sort</option>
+                            <option value="bucket">Bucket Sort</option>
+                        </select>
+                    </div>
+                    <div class="selector-group">
+                        <label>Algorithm 2</label>
+                        <select id="algo2Select" class="select-control">
+                            <option value="selection">Selection Sort</option>
+                            <option value="bubble">Bubble Sort</option>
+                            <option value="insertion">Insertion Sort</option>
+                            <option value="merge" selected>Merge Sort</option>
+                            <option value="quick">Quick Sort</option>
+                            <option value="heap">Heap Sort</option>
+                            <option value="counting">Counting Sort</option>
+                            <option value="radix">Radix Sort</option>
+                            <option value="shell">Shell Sort</option>
+                            <option value="timsort">TimSort</option>
+                            <option value="cocktail">Cocktail Shaker Sort</option>
+                            <option value="bucket">Bucket Sort</option>
+                        </select>
+                    </div>
+                </div>
+                <button id="runComparisonBtn" class="btn btn-primary btn-block">Run Comparison</button>
+                
+                <div id="comparisonResults" class="comparison-results hidden">
+                    <div class="comparison-table">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Metric</th>
+                                    <th id="algo1Name">Algorithm 1</th>
+                                    <th id="algo2Name">Algorithm 2</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Comparisons</td>
+                                    <td id="comp1Comparisons">-</td>
+                                    <td id="comp2Comparisons">-</td>
+                                </tr>
+                                <tr>
+                                    <td>Swaps</td>
+                                    <td id="comp1Swaps">-</td>
+                                    <td id="comp2Swaps">-</td>
+                                </tr>
+                                <tr>
+                                    <td>Time (ms)</td>
+                                    <td id="comp1Time">-</td>
+                                    <td id="comp2Time">-</td>
+                                </tr>
+                                <tr>
+                                    <td>Winner</td>
+                                    <td colspan="2" id="compWinner" class="winner-cell">-</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <button id="sidebarHandle" class="edge-handle edge-handle-left hidden" aria-label="Open algorithm sidebar" type="button">
+        Algorithms
+    </button>
+    <button id="panelHandle" class="edge-handle edge-handle-right hidden" aria-label="Open learning panel" type="button">
+        Learning
+    </button>
+    <div id="drawerBackdrop" class="drawer-backdrop hidden" aria-hidden="true"></div>
+    
+    <script src="script.js"></script>
+</body>
+</html>
