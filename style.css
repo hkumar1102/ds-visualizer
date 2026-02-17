@@ -420,6 +420,28 @@ body::after {
     box-shadow: 0 0 0 3px var(--primary-light);
 }
 
+.numeric-control {
+    padding: 8px 12px;
+    background: linear-gradient(180deg, var(--surface-raised), var(--surface));
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    outline: none;
+    width: 100%;
+    min-height: 38px;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+
+.numeric-control:hover {
+    border-color: var(--primary);
+}
+
+.numeric-control:focus {
+    border-color: var(--primary);
+    box-shadow: 0 0 0 3px var(--primary-light);
+}
+
 .slider {
     -webkit-appearance: none;
     appearance: none;
@@ -903,6 +925,12 @@ body::after {
     background: var(--bg-tertiary);
     font-weight: 600;
     color: var(--text-secondary);
+}
+
+.dp-table th.dp-row-label {
+    text-align: left;
+    min-width: 96px;
+    background: linear-gradient(180deg, var(--surface-raised), var(--bg-tertiary));
 }
 
 .dp-table td {
@@ -1393,6 +1421,17 @@ body::after {
     margin-bottom: var(--space-3);
 }
 
+.comparison-advanced-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+    padding: var(--space-2);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border-color);
+    background: linear-gradient(180deg, rgba(14, 165, 233, 0.08), rgba(34, 197, 94, 0.06));
+}
+
 .selector-group {
     display: flex;
     flex-direction: column;
@@ -1805,6 +1844,11 @@ body.drawer-open {
     .comparison-selectors {
         grid-template-columns: 1fr;
     }
+
+    .comparison-advanced-controls {
+        grid-template-columns: 1fr;
+        padding: 10px;
+    }
     
     .complexity-grid {
         grid-template-columns: 1fr;
@@ -1853,6 +1897,12 @@ body.drawer-open {
     .tab-btn {
         padding: 10px 8px;
         min-width: 80px;
+    }
+
+    .comparison-table th,
+    .comparison-table td {
+        padding: 10px 12px;
+        font-size: 0.8rem;
     }
 
     .quiz-stats,

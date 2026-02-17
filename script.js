@@ -20,6 +20,7 @@ const state = {
     // Configuration
     size: 50,
     speed: 50,
+    dataProfile: 'random',
     theme: 'dark',
     soundEnabled: true,
     interviewMode: false,
@@ -59,8 +60,11 @@ const STORAGE_KEYS = {
     theme: 'dsa_visualizer_theme',
     sound: 'dsa_visualizer_sound',
     mode: 'dsa_visualizer_mode',
-    quality: 'dsa_visualizer_quality'
+    quality: 'dsa_visualizer_quality',
+    dataProfile: 'dsa_visualizer_data_profile'
 };
+
+const DATA_PROFILES = new Set(['random', 'nearly', 'reversed', 'few-unique', 'wave']);
 
 function safeStorageGet(key) {
     try {
@@ -88,6 +92,7 @@ const elements = {
     categorySelector: document.getElementById('categorySelector'),
     sizeSlider: document.getElementById('sizeSlider'),
     speedSlider: document.getElementById('speedSlider'),
+    dataProfileSelect: document.getElementById('dataProfileSelect'),
     sizeValue: document.getElementById('sizeValue'),
     speedValue: document.getElementById('speedValue'),
     
@@ -180,6 +185,23 @@ const elements = {
     comparisonModal: document.getElementById('comparisonModal'),
     modalClose: document.querySelector('.modal-close'),
     runComparisonBtn: document.getElementById('runComparisonBtn'),
+    comparisonProfile: document.getElementById('comparisonProfile'),
+    comparisonRounds: document.getElementById('comparisonRounds'),
+    comp1Comparisons: document.getElementById('comp1Comparisons'),
+    comp2Comparisons: document.getElementById('comp2Comparisons'),
+    comp1Swaps: document.getElementById('comp1Swaps'),
+    comp2Swaps: document.getElementById('comp2Swaps'),
+    comp1Ops: document.getElementById('comp1Ops'),
+    comp2Ops: document.getElementById('comp2Ops'),
+    comp1Accesses: document.getElementById('comp1Accesses'),
+    comp2Accesses: document.getElementById('comp2Accesses'),
+    comp1AvgTime: document.getElementById('comp1AvgTime'),
+    comp2AvgTime: document.getElementById('comp2AvgTime'),
+    comp1MedianTime: document.getElementById('comp1MedianTime'),
+    comp2MedianTime: document.getElementById('comp2MedianTime'),
+    comp1BestTime: document.getElementById('comp1BestTime'),
+    comp2BestTime: document.getElementById('comp2BestTime'),
+    compWinner: document.getElementById('compWinner'),
     
     // Graph Tools
     graphTools: document.getElementById('graphTools'),
@@ -406,6 +428,9 @@ function initializePreferences() {
 
     const storedQuality = safeStorageGet(STORAGE_KEYS.quality);
     state.highQuality = storedQuality === null ? true : storedQuality === 'high';
+
+    const storedProfile = safeStorageGet(STORAGE_KEYS.dataProfile);
+    state.dataProfile = DATA_PROFILES.has(storedProfile) ? storedProfile : 'random';
 }
 
 function syncPreferenceControls() {
@@ -434,6 +459,14 @@ function syncPreferenceControls() {
         if (qualityLabel) {
             qualityLabel.textContent = state.highQuality ? 'High' : 'Low';
         }
+    }
+
+    if (elements.dataProfileSelect) {
+        elements.dataProfileSelect.value = state.dataProfile;
+    }
+
+    if (elements.comparisonProfile) {
+        elements.comparisonProfile.value = state.dataProfile;
     }
 
     if (elements.rightPanel && state.interviewMode) {
@@ -2707,16 +2740,58 @@ function resizeCanvas() {
 }
 
 // === Array Generation ===
-function generateArray() {
-    const size = parseInt(state.size);
-    state.array = [];
-    
-    for (let i = 0; i < size; i++) {
-        state.array.push({
-            value: Math.floor(Math.random() * 100) + 1,
-            state: 'default'
-        });
+function clampNumber(value, min, max) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) return min;
+    return Math.min(max, Math.max(min, numeric));
+}
+
+function randomInt(min, max) {
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function generateArrayValues(size, profile = state.dataProfile) {
+    const n = clampNumber(parseInt(size, 10) || 50, 2, 400);
+    const normalizedProfile = DATA_PROFILES.has(profile) ? profile : 'random';
+
+    if (normalizedProfile === 'few-unique') {
+        const pool = [8, 16, 24, 32, 40, 48, 56, 64];
+        return Array.from({ length: n }, () => pool[randomInt(0, pool.length - 1)]);
     }
+
+    if (normalizedProfile === 'reversed') {
+        return Array.from({ length: n }, () => randomInt(1, 240)).sort((a, b) => b - a);
+    }
+
+    if (normalizedProfile === 'nearly') {
+        const values = Array.from({ length: n }, () => randomInt(1, 240)).sort((a, b) => a - b);
+        const swapCount = Math.max(1, Math.floor(n * 0.08));
+        for (let i = 0; i < swapCount; i++) {
+            const a = randomInt(0, n - 2);
+            const b = Math.min(n - 1, a + randomInt(1, Math.max(1, Math.floor(n * 0.05))));
+            [values[a], values[b]] = [values[b], values[a]];
+        }
+        return values;
+    }
+
+    if (normalizedProfile === 'wave') {
+        const values = Array.from({ length: n }, (_, idx) => {
+            const base = randomInt(12, 180);
+            const waveBoost = Math.sin((idx / Math.max(1, n - 1)) * Math.PI * 6) * 42;
+            return Math.max(1, Math.round(base + waveBoost));
+        });
+        return values;
+    }
+
+    return Array.from({ length: n }, () => randomInt(1, 240));
+}
+
+function generateArray() {
+    const values = generateArrayValues(state.size, state.dataProfile);
+    state.array = values.map(value => ({
+        value,
+        state: 'default'
+    }));
     
     resetAnalytics();
     drawArray();
@@ -2815,6 +2890,41 @@ function generateTree() {
     drawTree();
 }
 
+function buildFloydPreviewMatrix(maxNodes = 8) {
+    const nodeCount = Math.max(4, Math.min(maxNodes, state.graph.nodes.length || 6));
+    const dist = Array.from({ length: nodeCount }, () => new Array(nodeCount).fill(Infinity));
+
+    for (let i = 0; i < nodeCount; i++) {
+        dist[i][i] = 0;
+    }
+
+    if (state.graph.edges.length > 0) {
+        state.graph.edges.forEach(edge => {
+            if (edge.from >= nodeCount || edge.to >= nodeCount) return;
+            const weight = Number.isFinite(edge.weight) ? edge.weight : 1;
+            dist[edge.from][edge.to] = Math.min(dist[edge.from][edge.to], weight);
+            if (!state.isDirected) {
+                dist[edge.to][edge.from] = Math.min(dist[edge.to][edge.from], weight);
+            }
+        });
+    } else {
+        const sampleEdges = [
+            [0, 1, 3],
+            [0, 2, 8],
+            [1, 2, 2],
+            [1, 3, 5],
+            [2, 3, 1]
+        ];
+        sampleEdges.forEach(([from, to, weight]) => {
+            if (from >= nodeCount || to >= nodeCount) return;
+            dist[from][to] = weight;
+            dist[to][from] = weight;
+        });
+    }
+
+    return dist;
+}
+
 function renderDPPreview() {
     switch (state.algorithm) {
         case 'fibonacci':
@@ -2886,6 +2996,9 @@ function renderDPPreview() {
                 ],
                 ['Subset Sum Preview']
             );
+            break;
+        case 'floyd':
+            drawDPTable(buildFloydPreviewMatrix(), ['Floyd-Warshall Preview']);
             break;
         default:
             elements.dpTable.innerHTML = '';
@@ -3044,6 +3157,10 @@ function prepareDataForCurrentAlgorithm(forceGenerate = false) {
         } else {
             clearVisualizationStates();
             drawGraph();
+        }
+
+        if (state.algorithm === 'floyd') {
+            renderDPPreview();
         }
         return;
     }
@@ -7583,7 +7700,7 @@ async function graphColoringVisualization() {
     const colors = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#ec4899'];
     const nodeColors = new Array(state.graph.nodes.length).fill(-1);
     
-    updateStep('Graph Coloring: Using greedy algorithm');
+    updateStep('Graph Coloring: greedy assignment over neighboring nodes');
     drawGraph();
     await delay();
     
@@ -7598,27 +7715,27 @@ async function graphColoringVisualization() {
             if (edge.from === i && nodeColors[edge.to] !== -1) {
                 usedColors.add(nodeColors[edge.to]);
             }
-            if (!state.isDirected && edge.to === i && nodeColors[edge.from] !== -1) {
+            if (edge.to === i && nodeColors[edge.from] !== -1) {
                 usedColors.add(nodeColors[edge.from]);
             }
         }
         
-        // Find first available color
-        for (let color = 0; color < colors.length; color++) {
-            if (!usedColors.has(color)) {
-                nodeColors[i] = color;
-                break;
-            }
+        // Find first available color index.
+        let colorIndex = 0;
+        while (usedColors.has(colorIndex)) {
+            colorIndex++;
         }
-        
-        state.graph.nodes[i].color = colors[nodeColors[i]];
+        nodeColors[i] = colorIndex;
+
+        const paletteColor = colors[colorIndex] || `hsl(${(colorIndex * 57) % 360} 78% 55%)`;
+        state.graph.nodes[i].color = paletteColor;
         state.graph.nodes[i].state = 'visited';
         
-        updateStep(`Node ${i} colored with color ${nodeColors[i] + 1}`);
+        updateStep(`Node ${i} colored with color ${colorIndex + 1}`);
         state.operations++;
         updateAnalytics();
         drawGraph();
-        playSound(50 + nodeColors[i] * 10);
+        playSound(50 + colorIndex * 10);
         await delay();
     }
     
@@ -7810,45 +7927,51 @@ function drawDPTable(table, labels = [], highlight = -1) {
     
     const tableElement = document.createElement('table');
     tableElement.className = 'generated-dp-table';
-    
-    labels.forEach(label => {
-        if (!label) return;
+
+    const normalizedRows = table.map(row => (Array.isArray(row) ? row : [row]));
+    const hasRowLabels = normalizedRows.length > 1 && (
+        labels.length === normalizedRows.length
+        || labels.length === normalizedRows.length + 1
+    );
+    const captionText = hasRowLabels
+        ? (labels.length === normalizedRows.length + 1 ? labels[0] : '')
+        : (labels[0] || '');
+    const rowLabels = hasRowLabels
+        ? (labels.length === normalizedRows.length + 1 ? labels.slice(1) : labels)
+        : [];
+
+    if (captionText) {
         const caption = document.createElement('caption');
-        caption.textContent = label;
+        caption.textContent = captionText;
         tableElement.appendChild(caption);
-    });
-    
-    table.forEach((row, i) => {
+    }
+
+    let flatCellIndex = 0;
+    normalizedRows.forEach((rowCells, rowIndex) => {
         const tr = document.createElement('tr');
-        
-        if (Array.isArray(row)) {
-            const rowLength = Math.max(1, row.length);
-            row.forEach((cell, j) => {
-                const td = document.createElement('td');
-                td.textContent = cell === Infinity ? 'Infinity' : cell;
-                
-                const cellIndex = i * rowLength + j;
-                if (cellIndex === highlight) {
-                    td.classList.add('current');
-                } else if (Number.isFinite(cell) && cell > 0) {
-                    td.classList.add('filled');
-                }
-                
-                tr.appendChild(td);
-            });
-        } else {
+
+        if (rowLabels[rowIndex]) {
+            const th = document.createElement('th');
+            th.scope = 'row';
+            th.className = 'dp-row-label';
+            th.textContent = rowLabels[rowIndex];
+            tr.appendChild(th);
+        }
+
+        rowCells.forEach(cell => {
             const td = document.createElement('td');
-            td.textContent = row === Infinity ? 'Infinity' : row;
-            
-            if (i === highlight) {
+            td.textContent = cell === Infinity ? '∞' : cell;
+
+            if (flatCellIndex === highlight) {
                 td.classList.add('current');
-            } else if (Number.isFinite(row) && row > 0) {
+            } else if (Number.isFinite(cell) && cell > 0) {
                 td.classList.add('filled');
             }
-            
+
+            flatCellIndex++;
             tr.appendChild(td);
-        }
-        
+        });
+
         tableElement.appendChild(tr);
     });
     
@@ -7988,7 +8111,10 @@ function updateStep(text, progress = null) {
     elements.stepText.textContent = text;
     
     if (progress !== null) {
-        elements.stepProgress.style.width = `${progress}%`;
+        const bounded = clampNumber(progress, 0, 100);
+        elements.stepProgress.style.width = `${bounded}%`;
+    } else if (!state.isRunning && !state.selfTestRunning) {
+        elements.stepProgress.style.width = '0%';
     }
 }
 
@@ -9018,6 +9144,458 @@ function tspNearestNeighborPure(cities) {
     return { tour, total };
 }
 
+function buildAdjacencyListPure(nodeCount, edges, directed = false) {
+    const adj = Array.from({ length: nodeCount }, () => []);
+    edges.forEach(([from, to]) => {
+        if (!Number.isInteger(from) || !Number.isInteger(to)) return;
+        if (from < 0 || from >= nodeCount || to < 0 || to >= nodeCount) return;
+        adj[from].push(to);
+        if (!directed) {
+            adj[to].push(from);
+        }
+    });
+    adj.forEach(neighbors => neighbors.sort((a, b) => a - b));
+    return adj;
+}
+
+function bfsOrderPure(nodeCount, edges, start = 0, directed = false) {
+    const adj = buildAdjacencyListPure(nodeCount, edges, directed);
+    const visited = new Array(nodeCount).fill(false);
+    const order = [];
+    const queue = [start];
+    visited[start] = true;
+
+    while (queue.length) {
+        const node = queue.shift();
+        order.push(node);
+        for (const next of adj[node]) {
+            if (visited[next]) continue;
+            visited[next] = true;
+            queue.push(next);
+        }
+    }
+    return order;
+}
+
+function dfsOrderPure(nodeCount, edges, start = 0, directed = false) {
+    const adj = buildAdjacencyListPure(nodeCount, edges, directed);
+    const visited = new Array(nodeCount).fill(false);
+    const order = [];
+    const stack = [start];
+
+    while (stack.length) {
+        const node = stack.pop();
+        if (visited[node]) continue;
+        visited[node] = true;
+        order.push(node);
+
+        for (let i = adj[node].length - 1; i >= 0; i--) {
+            const next = adj[node][i];
+            if (!visited[next]) stack.push(next);
+        }
+    }
+    return order;
+}
+
+function bidirectionalDistancePure(nodeCount, edges, source, target, directed = false) {
+    if (source === target) return 0;
+
+    const adj = buildAdjacencyListPure(nodeCount, edges, directed);
+    const distFromSource = new Array(nodeCount).fill(-1);
+    const distFromTarget = new Array(nodeCount).fill(-1);
+    const queueSource = [source];
+    const queueTarget = [target];
+
+    distFromSource[source] = 0;
+    distFromTarget[target] = 0;
+
+    const expand = (queue, ownDist, otherDist) => {
+        const levelSize = queue.length;
+        for (let i = 0; i < levelSize; i++) {
+            const node = queue.shift();
+            for (const next of adj[node]) {
+                if (ownDist[next] !== -1) continue;
+                ownDist[next] = ownDist[node] + 1;
+                if (otherDist[next] !== -1) {
+                    return ownDist[next] + otherDist[next];
+                }
+                queue.push(next);
+            }
+        }
+        return -1;
+    };
+
+    while (queueSource.length && queueTarget.length) {
+        const hitFromSource = expand(queueSource, distFromSource, distFromTarget);
+        if (hitFromSource !== -1) return hitFromSource;
+
+        const hitFromTarget = expand(queueTarget, distFromTarget, distFromSource);
+        if (hitFromTarget !== -1) return hitFromTarget;
+    }
+
+    return -1;
+}
+
+function dijkstraPure(nodeCount, weightedEdges, start = 0, directed = false) {
+    const adj = Array.from({ length: nodeCount }, () => []);
+    weightedEdges.forEach(([from, to, weight]) => {
+        if (from < 0 || to < 0 || from >= nodeCount || to >= nodeCount) return;
+        const w = Number.isFinite(weight) ? weight : 1;
+        adj[from].push({ to, weight: w });
+        if (!directed) {
+            adj[to].push({ to: from, weight: w });
+        }
+    });
+
+    const dist = new Array(nodeCount).fill(Infinity);
+    const used = new Array(nodeCount).fill(false);
+    dist[start] = 0;
+
+    for (let step = 0; step < nodeCount; step++) {
+        let current = -1;
+        let best = Infinity;
+        for (let i = 0; i < nodeCount; i++) {
+            if (!used[i] && dist[i] < best) {
+                best = dist[i];
+                current = i;
+            }
+        }
+        if (current === -1) break;
+        used[current] = true;
+
+        for (const edge of adj[current]) {
+            if (dist[current] + edge.weight < dist[edge.to]) {
+                dist[edge.to] = dist[current] + edge.weight;
+            }
+        }
+    }
+
+    return dist;
+}
+
+function bellmanFordPure(nodeCount, weightedEdges, start = 0, directed = false) {
+    const normalizedEdges = [];
+    weightedEdges.forEach(([from, to, weight]) => {
+        if (from < 0 || to < 0 || from >= nodeCount || to >= nodeCount) return;
+        const w = Number.isFinite(weight) ? weight : 1;
+        normalizedEdges.push([from, to, w]);
+        if (!directed) normalizedEdges.push([to, from, w]);
+    });
+
+    const dist = new Array(nodeCount).fill(Infinity);
+    dist[start] = 0;
+
+    for (let i = 0; i < nodeCount - 1; i++) {
+        let changed = false;
+        for (const [from, to, weight] of normalizedEdges) {
+            if (dist[from] === Infinity) continue;
+            if (dist[from] + weight < dist[to]) {
+                dist[to] = dist[from] + weight;
+                changed = true;
+            }
+        }
+        if (!changed) break;
+    }
+
+    let hasNegativeCycle = false;
+    for (const [from, to, weight] of normalizedEdges) {
+        if (dist[from] !== Infinity && dist[from] + weight < dist[to]) {
+            hasNegativeCycle = true;
+            break;
+        }
+    }
+
+    return { dist, hasNegativeCycle };
+}
+
+function floydWarshallPure(nodeCount, weightedEdges, directed = false) {
+    const dist = Array.from({ length: nodeCount }, () => new Array(nodeCount).fill(Infinity));
+    for (let i = 0; i < nodeCount; i++) {
+        dist[i][i] = 0;
+    }
+
+    weightedEdges.forEach(([from, to, weight]) => {
+        if (from < 0 || to < 0 || from >= nodeCount || to >= nodeCount) return;
+        const w = Number.isFinite(weight) ? weight : 1;
+        dist[from][to] = Math.min(dist[from][to], w);
+        if (!directed) {
+            dist[to][from] = Math.min(dist[to][from], w);
+        }
+    });
+
+    for (let k = 0; k < nodeCount; k++) {
+        for (let i = 0; i < nodeCount; i++) {
+            for (let j = 0; j < nodeCount; j++) {
+                if (dist[i][k] === Infinity || dist[k][j] === Infinity) continue;
+                const throughK = dist[i][k] + dist[k][j];
+                if (throughK < dist[i][j]) dist[i][j] = throughK;
+            }
+        }
+    }
+
+    return dist;
+}
+
+function topologicalSortPure(nodeCount, directedEdges) {
+    const adj = Array.from({ length: nodeCount }, () => []);
+    const indegree = new Array(nodeCount).fill(0);
+
+    directedEdges.forEach(([from, to]) => {
+        if (from < 0 || to < 0 || from >= nodeCount || to >= nodeCount) return;
+        adj[from].push(to);
+        indegree[to]++;
+    });
+
+    const queue = [];
+    for (let i = 0; i < nodeCount; i++) {
+        if (indegree[i] === 0) queue.push(i);
+    }
+    queue.sort((a, b) => a - b);
+
+    const order = [];
+    while (queue.length) {
+        const node = queue.shift();
+        order.push(node);
+        for (const next of adj[node]) {
+            indegree[next]--;
+            if (indegree[next] === 0) {
+                queue.push(next);
+                queue.sort((a, b) => a - b);
+            }
+        }
+    }
+    return order;
+}
+
+function mstWeightKruskalPure(nodeCount, weightedEdges) {
+    const parent = Array.from({ length: nodeCount }, (_, i) => i);
+    const rank = new Array(nodeCount).fill(0);
+    const sortedEdges = [...weightedEdges].sort((a, b) => a[2] - b[2]);
+    let total = 0;
+    let used = 0;
+
+    const find = (x) => {
+        if (parent[x] !== x) parent[x] = find(parent[x]);
+        return parent[x];
+    };
+
+    const union = (a, b) => {
+        let rootA = find(a);
+        let rootB = find(b);
+        if (rootA === rootB) return false;
+
+        if (rank[rootA] < rank[rootB]) {
+            [rootA, rootB] = [rootB, rootA];
+        }
+        parent[rootB] = rootA;
+        if (rank[rootA] === rank[rootB]) rank[rootA]++;
+        return true;
+    };
+
+    for (const [from, to, weight] of sortedEdges) {
+        if (union(from, to)) {
+            total += weight;
+            used++;
+            if (used === nodeCount - 1) break;
+        }
+    }
+
+    return used === nodeCount - 1 ? total : Infinity;
+}
+
+function mstWeightPrimPure(nodeCount, weightedEdges) {
+    if (nodeCount === 0) return 0;
+
+    const adj = Array.from({ length: nodeCount }, () => []);
+    weightedEdges.forEach(([from, to, weight]) => {
+        if (from < 0 || to < 0 || from >= nodeCount || to >= nodeCount) return;
+        adj[from].push({ to, weight });
+        adj[to].push({ to: from, weight });
+    });
+
+    const inMST = new Array(nodeCount).fill(false);
+    const minEdge = new Array(nodeCount).fill(Infinity);
+    minEdge[0] = 0;
+    let total = 0;
+
+    for (let i = 0; i < nodeCount; i++) {
+        let node = -1;
+        for (let j = 0; j < nodeCount; j++) {
+            if (!inMST[j] && (node === -1 || minEdge[j] < minEdge[node])) {
+                node = j;
+            }
+        }
+        if (node === -1 || minEdge[node] === Infinity) return Infinity;
+        inMST[node] = true;
+        total += minEdge[node];
+
+        for (const edge of adj[node]) {
+            if (!inMST[edge.to] && edge.weight < minEdge[edge.to]) {
+                minEdge[edge.to] = edge.weight;
+            }
+        }
+    }
+
+    return total;
+}
+
+function greedyColoringPure(nodeCount, edges) {
+    const adj = buildAdjacencyListPure(nodeCount, edges, false);
+    const colors = new Array(nodeCount).fill(-1);
+
+    for (let node = 0; node < nodeCount; node++) {
+        const used = new Set();
+        for (const neighbor of adj[node]) {
+            if (colors[neighbor] !== -1) used.add(colors[neighbor]);
+        }
+        let color = 0;
+        while (used.has(color)) color++;
+        colors[node] = color;
+    }
+    return colors;
+}
+
+function isValidColoringPure(edges, colors) {
+    return edges.every(([from, to]) => colors[from] !== colors[to]);
+}
+
+function buildBSTPure(values) {
+    const insert = (node, value) => {
+        if (!node) return { value, left: null, right: null };
+        if (value < node.value) node.left = insert(node.left, value);
+        else node.right = insert(node.right, value);
+        return node;
+    };
+
+    let root = null;
+    values.forEach(value => {
+        root = insert(root, value);
+    });
+    return root;
+}
+
+function inorderPure(node, out = []) {
+    if (!node) return out;
+    inorderPure(node.left, out);
+    out.push(node.value);
+    inorderPure(node.right, out);
+    return out;
+}
+
+function preorderPure(node, out = []) {
+    if (!node) return out;
+    out.push(node.value);
+    preorderPure(node.left, out);
+    preorderPure(node.right, out);
+    return out;
+}
+
+function postorderPure(node, out = []) {
+    if (!node) return out;
+    postorderPure(node.left, out);
+    postorderPure(node.right, out);
+    out.push(node.value);
+    return out;
+}
+
+function levelOrderPure(node) {
+    if (!node) return [];
+    const queue = [node];
+    const out = [];
+    while (queue.length) {
+        const current = queue.shift();
+        out.push(current.value);
+        if (current.left) queue.push(current.left);
+        if (current.right) queue.push(current.right);
+    }
+    return out;
+}
+
+function buildTriePure(words) {
+    const root = { children: Object.create(null), isEnd: false };
+    for (const word of words) {
+        let node = root;
+        for (const char of word) {
+            if (!node.children[char]) {
+                node.children[char] = { children: Object.create(null), isEnd: false };
+            }
+            node = node.children[char];
+        }
+        node.isEnd = true;
+    }
+    return root;
+}
+
+function trieContainsPure(root, word) {
+    let node = root;
+    for (const char of word) {
+        if (!node.children[char]) return false;
+        node = node.children[char];
+    }
+    return !!node.isEnd;
+}
+
+function convexHullSizePure(points) {
+    if (points.length <= 1) return points.length;
+
+    const sorted = [...points].sort((a, b) => {
+        if (a.x !== b.x) return a.x - b.x;
+        return a.y - b.y;
+    });
+
+    const cross = (o, a, b) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+    const lower = [];
+    for (const point of sorted) {
+        while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) {
+            lower.pop();
+        }
+        lower.push(point);
+    }
+
+    const upper = [];
+    for (let i = sorted.length - 1; i >= 0; i--) {
+        const point = sorted[i];
+        while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) {
+            upper.pop();
+        }
+        upper.push(point);
+    }
+
+    lower.pop();
+    upper.pop();
+    return lower.concat(upper).length;
+}
+
+function collectAlgorithmMetadataIssues() {
+    const issues = [];
+    Object.entries(algorithmDB).forEach(([id, data]) => {
+        if (!data || typeof data !== 'object') {
+            issues.push(`${id}: missing algorithm metadata object`);
+            return;
+        }
+
+        if (!data.name || typeof data.name !== 'string') {
+            issues.push(`${id}: missing display name`);
+        }
+        if (!data.description || typeof data.description !== 'string') {
+            issues.push(`${id}: missing description`);
+        }
+        if (!Array.isArray(data.steps) || data.steps.length === 0) {
+            issues.push(`${id}: missing steps`);
+        }
+        if (!Array.isArray(data.useCases) || data.useCases.length === 0) {
+            issues.push(`${id}: missing use-cases`);
+        }
+        if (!data.complexity || typeof data.complexity !== 'object') {
+            issues.push(`${id}: missing complexity block`);
+        }
+        if (!data.code || typeof data.code !== 'string') {
+            issues.push(`${id}: missing code sample`);
+        }
+    });
+    return issues;
+}
+
 function getSelfTestCases() {
     const baseSortData = [42, 7, 13, 99, 1, 37, 58, 18, 73, 2, 42, 16, 8, 90, 27, 11, 64, 5, 33, 21];
     const nearlySorted = [1, 2, 3, 4, 5, 7, 6, 8, 9, 10, 12, 11, 13, 15, 14];
@@ -9104,11 +9682,158 @@ function getSelfTestCases() {
             }
         },
         {
+            name: 'Graphs: BFS traversal order baseline',
+            run: () => {
+                const edges = [[0, 1], [0, 2], [1, 3], [2, 4], [4, 5]];
+                const order = bfsOrderPure(6, edges, 0, false);
+                expectArrayEqual(order, [0, 1, 2, 3, 4, 5], 'BFS traversal order mismatch');
+                return `order=[${order.join(', ')}]`;
+            }
+        },
+        {
+            name: 'Graphs: DFS traversal reaches all connected nodes',
+            run: () => {
+                const edges = [[0, 1], [0, 2], [1, 3], [2, 4], [4, 5]];
+                const order = dfsOrderPure(6, edges, 0, false);
+                expectEqual(order.length, 6, 'DFS should visit all nodes');
+                expect(new Set(order).size === 6, 'DFS visited duplicate nodes');
+                return `visited=${order.length}`;
+            }
+        },
+        {
+            name: 'Graphs: Bidirectional BFS shortest distance',
+            run: () => {
+                const edges = [[0, 1], [1, 2], [2, 3], [3, 4], [1, 5], [5, 4]];
+                const distance = bidirectionalDistancePure(6, edges, 0, 4, false);
+                expectEqual(distance, 3, 'Bidirectional BFS distance mismatch');
+                return `distance=${distance}`;
+            }
+        },
+        {
+            name: 'Graphs: Dijkstra shortest paths',
+            run: () => {
+                const weighted = [[0, 1, 4], [0, 2, 1], [2, 1, 2], [1, 3, 1], [2, 3, 5]];
+                const dist = dijkstraPure(4, weighted, 0, false);
+                expectEqual(dist[3], 4, 'Dijkstra distance to node 3 mismatch');
+                return `dist(0->3)=${dist[3]}`;
+            }
+        },
+        {
+            name: 'Graphs: Bellman-Ford shortest paths',
+            run: () => {
+                const weighted = [[0, 1, 4], [0, 2, 5], [1, 2, -2], [2, 3, 3]];
+                const result = bellmanFordPure(4, weighted, 0, true);
+                expect(!result.hasNegativeCycle, 'Bellman-Ford falsely detected a negative cycle');
+                expectEqual(result.dist[3], 5, 'Bellman-Ford distance to node 3 mismatch');
+                return `dist(0->3)=${result.dist[3]}`;
+            }
+        },
+        {
+            name: 'Graphs: Floyd-Warshall all-pairs distance',
+            run: () => {
+                const weighted = [[0, 1, 4], [0, 2, 1], [2, 1, 2], [1, 3, 1], [2, 3, 5]];
+                const dist = floydWarshallPure(4, weighted, false);
+                expectEqual(dist[0][3], 4, 'Floyd-Warshall distance mismatch');
+                return `dist(0->3)=${dist[0][3]}`;
+            }
+        },
+        {
+            name: 'Graphs: Topological Sort respects edge order',
+            run: () => {
+                const edges = [[5, 2], [5, 0], [4, 0], [4, 1], [2, 3], [3, 1]];
+                const order = topologicalSortPure(6, edges);
+                expectEqual(order.length, 6, 'Topological sort should include all nodes');
+                const pos = new Map(order.map((node, idx) => [node, idx]));
+                edges.forEach(([from, to]) => {
+                    expect(pos.get(from) < pos.get(to), `Invalid topo order for edge ${from}->${to}`);
+                });
+                return `order=[${order.join(', ')}]`;
+            }
+        },
+        {
+            name: 'Graphs: Kruskal and Prim MST weights agree',
+            run: () => {
+                const weighted = [[0, 1, 4], [0, 2, 3], [1, 2, 1], [1, 3, 2], [2, 3, 4], [3, 4, 2], [4, 5, 6]];
+                const kruskalWeight = mstWeightKruskalPure(6, weighted);
+                const primWeight = mstWeightPrimPure(6, weighted);
+                expectEqual(kruskalWeight, primWeight, 'MST weights mismatch between Kruskal and Prim');
+                return `mst weight=${kruskalWeight}`;
+            }
+        },
+        {
+            name: 'Graphs: Union-Find connectivity checks',
+            run: () => {
+                const parent = Array.from({ length: 6 }, (_, i) => i);
+                const rank = new Array(6).fill(0);
+
+                const find = (x) => {
+                    if (parent[x] !== x) parent[x] = find(parent[x]);
+                    return parent[x];
+                };
+                const union = (a, b) => {
+                    let rootA = find(a);
+                    let rootB = find(b);
+                    if (rootA === rootB) return;
+                    if (rank[rootA] < rank[rootB]) {
+                        [rootA, rootB] = [rootB, rootA];
+                    }
+                    parent[rootB] = rootA;
+                    if (rank[rootA] === rank[rootB]) rank[rootA]++;
+                };
+
+                union(0, 1);
+                union(1, 2);
+                union(3, 4);
+                expect(find(0) === find(2), '0 and 2 should be connected');
+                expect(find(0) !== find(4), '0 and 4 should be disconnected');
+                union(2, 4);
+                expect(find(1) === find(3), '1 and 3 should be connected after union');
+                return 'union-find connectivity validated';
+            }
+        },
+        {
+            name: 'Graphs: Greedy coloring validity',
+            run: () => {
+                const edges = [[0, 1], [0, 2], [1, 2], [1, 3], [2, 4], [3, 4]];
+                const colors = greedyColoringPure(5, edges);
+                expect(isValidColoringPure(edges, colors), 'Coloring contains adjacent conflict');
+                return `colors=${Math.max(...colors) + 1}`;
+            }
+        },
+        {
             name: 'Graphs: Connected Components count',
             run: () => {
                 const count = connectedComponentsCountPure(7, [[0, 1], [1, 2], [3, 4], [5, 6]]);
                 expectEqual(count, 3, 'Connected components count mismatch');
                 return 'component count = 3';
+            }
+        },
+        {
+            name: 'Trees: BST traversal consistency',
+            run: () => {
+                const values = [50, 30, 70, 20, 40, 60, 80];
+                const root = buildBSTPure(values);
+                const inorder = inorderPure(root);
+                const preorder = preorderPure(root);
+                const postorder = postorderPure(root);
+                const level = levelOrderPure(root);
+
+                expectArrayEqual(inorder, [20, 30, 40, 50, 60, 70, 80], 'BST inorder mismatch');
+                expectEqual(preorder.length, values.length, 'BST preorder length mismatch');
+                expectEqual(postorder.length, values.length, 'BST postorder length mismatch');
+                expectEqual(level.length, values.length, 'BST level-order length mismatch');
+                return 'inorder/preorder/postorder/level-order validated';
+            }
+        },
+        {
+            name: 'Trees: Trie insertion and search',
+            run: () => {
+                const trie = buildTriePure(['cat', 'car', 'dog', 'dove']);
+                expect(trieContainsPure(trie, 'cat'), 'Trie should contain "cat"');
+                expect(trieContainsPure(trie, 'dog'), 'Trie should contain "dog"');
+                expect(!trieContainsPure(trie, 'cow'), 'Trie should not contain "cow"');
+                expect(!trieContainsPure(trie, 'do'), 'Trie should not contain prefix-only "do"');
+                return 'trie contains/absent checks passed';
             }
         },
         {
@@ -9232,6 +9957,21 @@ function getSelfTestCases() {
             }
         },
         {
+            name: 'Geometry: Convex Hull point count',
+            run: () => {
+                const count = convexHullSizePure([
+                    { x: 0, y: 0 },
+                    { x: 2, y: 0 },
+                    { x: 2, y: 2 },
+                    { x: 0, y: 2 },
+                    { x: 1, y: 1 },
+                    { x: 1.2, y: 1.1 }
+                ]);
+                expectEqual(count, 4, 'Convex hull vertex count mismatch');
+                return 'hull vertices=4';
+            }
+        },
+        {
             name: 'Advanced: N-Queens 8x8 validity',
             run: () => {
                 const solution = solveNQueensPure(8);
@@ -9261,6 +10001,14 @@ function getSelfTestCases() {
                 expectEqual(result.tour.length, cities.length, 'TSP tour length mismatch');
                 expect(Number.isFinite(result.total) && result.total > 0, 'Invalid TSP tour distance');
                 return `tour length=${result.tour.length}, distance=${result.total.toFixed(2)}`;
+            }
+        },
+        {
+            name: 'Integrity: Algorithm metadata completeness',
+            run: () => {
+                const issues = collectAlgorithmMetadataIssues();
+                expectEqual(issues.length, 0, `Algorithm metadata issues detected: ${issues.slice(0, 3).join('; ')}`);
+                return `validated ${Object.keys(algorithmDB).length} algorithm descriptors`;
             }
         }
     );
@@ -9315,6 +10063,7 @@ async function runSelfTests() {
     const start = performance.now();
 
     setSelfTestStatus(`Running ${suite.length} checks...`, 'running');
+    updateStep(`Self-tests running (0/${suite.length})`, 0);
     updateSelfTestSummary(0, 0, 0);
     renderSelfTestResults([
         {
@@ -9328,6 +10077,7 @@ async function runSelfTests() {
         for (let i = 0; i < suite.length; i++) {
             const test = suite[i];
             setSelfTestStatus(`Running ${i + 1}/${suite.length}: ${test.name}`, 'running');
+            updateStep(`Self-test ${i + 1}/${suite.length}: ${test.name}`, ((i + 1) / suite.length) * 100);
 
             try {
                 const detail = await test.run();
@@ -9353,10 +10103,10 @@ async function runSelfTests() {
 
         if (failed === 0) {
             setSelfTestStatus(`All checks passed (${passed}/${suite.length}) in ${elapsed}ms.`, 'pass');
-            updateStep(`Self-tests passed: ${passed}/${suite.length}`);
+            updateStep(`Self-tests passed: ${passed}/${suite.length}`, 100);
         } else {
             setSelfTestStatus(`${failed} check(s) failed (${passed} passed) in ${elapsed}ms.`, 'fail');
-            updateStep(`Self-tests found ${failed} issue(s). Open Tests tab for details.`);
+            updateStep(`Self-tests found ${failed} issue(s). Open Tests tab for details.`, 100);
         }
 
         state.selfTestRunning = false;
@@ -9375,15 +10125,31 @@ async function runSelfTests() {
 function setupEventListeners() {
     // Size slider
     elements.sizeSlider.addEventListener('input', (e) => {
-        state.size = e.target.value;
+        state.size = Number(e.target.value);
         elements.sizeValue.textContent = state.size;
     });
     
     // Speed slider
     elements.speedSlider.addEventListener('input', (e) => {
-        state.speed = e.target.value;
+        state.speed = Number(e.target.value);
         elements.speedValue.textContent = state.speed;
     });
+
+    if (elements.dataProfileSelect) {
+        elements.dataProfileSelect.addEventListener('change', (e) => {
+            const selectedProfile = DATA_PROFILES.has(e.target.value) ? e.target.value : 'random';
+            state.dataProfile = selectedProfile;
+            safeStorageSet(STORAGE_KEYS.dataProfile, selectedProfile);
+
+            if (elements.comparisonProfile) {
+                elements.comparisonProfile.value = selectedProfile;
+            }
+
+            if (!state.isRunning && (state.category === 'sorting' || state.category === 'searching')) {
+                prepareDataForCurrentAlgorithm(true);
+            }
+        });
+    }
     
     // Category selector
     elements.categorySelector.addEventListener('change', (e) => {
@@ -9599,6 +10365,9 @@ function setupEventListeners() {
     
     // Comparison modal
     elements.comparisonBtn.addEventListener('click', () => {
+        if (elements.comparisonProfile) {
+            elements.comparisonProfile.value = state.dataProfile;
+        }
         elements.comparisonModal.classList.add('active');
     });
     
@@ -9735,40 +10504,128 @@ function setupEventListeners() {
 }
 
 // === Comparison Mode ===
+function averageOf(values) {
+    if (!values.length) return 0;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+}
+
+function medianOf(values) {
+    if (!values.length) return 0;
+    const sorted = [...values].sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    if (sorted.length % 2 === 0) {
+        return (sorted[mid - 1] + sorted[mid]) / 2;
+    }
+    return sorted[mid];
+}
+
+function summarizeBenchmarkRuns(runs) {
+    if (!runs.length) {
+        return {
+            comparisons: 0,
+            swaps: 0,
+            operations: 0,
+            accesses: 0,
+            avgTime: 0,
+            medianTime: 0,
+            bestTime: 0
+        };
+    }
+
+    const comparisons = runs.map(run => run.comparisons);
+    const swaps = runs.map(run => run.swaps);
+    const operations = runs.map(run => run.operations);
+    const accesses = runs.map(run => run.accesses);
+    const times = runs.map(run => run.time);
+
+    return {
+        comparisons: Math.round(averageOf(comparisons)),
+        swaps: Math.round(averageOf(swaps)),
+        operations: Math.round(averageOf(operations)),
+        accesses: Math.round(averageOf(accesses)),
+        avgTime: Number(averageOf(times).toFixed(2)),
+        medianTime: Number(medianOf(times).toFixed(2)),
+        bestTime: Number(Math.min(...times).toFixed(2))
+    };
+}
+
+function getComparisonWinner(algo1, algo2, summary1, summary2) {
+    if (summary1.medianTime !== summary2.medianTime) {
+        return summary1.medianTime < summary2.medianTime
+            ? `${algorithmDB[algo1]?.name || algo1} (better median time)`
+            : `${algorithmDB[algo2]?.name || algo2} (better median time)`;
+    }
+
+    if (summary1.avgTime !== summary2.avgTime) {
+        return summary1.avgTime < summary2.avgTime
+            ? `${algorithmDB[algo1]?.name || algo1} (better average time)`
+            : `${algorithmDB[algo2]?.name || algo2} (better average time)`;
+    }
+
+    if (summary1.operations !== summary2.operations) {
+        return summary1.operations < summary2.operations
+            ? `${algorithmDB[algo1]?.name || algo1} (fewer operations)`
+            : `${algorithmDB[algo2]?.name || algo2} (fewer operations)`;
+    }
+
+    return 'Tie (metrics are equivalent)';
+}
+
 async function runComparison() {
     const algo1 = document.getElementById('algo1Select').value;
     const algo2 = document.getElementById('algo2Select').value;
+    const profile = DATA_PROFILES.has(elements.comparisonProfile?.value)
+        ? elements.comparisonProfile.value
+        : state.dataProfile;
+    const rounds = clampNumber(parseInt(elements.comparisonRounds?.value, 10) || 5, 1, 20);
     
     document.getElementById('algo1Name').textContent = algorithmDB[algo1]?.name || algo1;
     document.getElementById('algo2Name').textContent = algorithmDB[algo2]?.name || algo2;
     
     elements.runComparisonBtn.disabled = true;
-    elements.runComparisonBtn.textContent = 'Running...';
+    elements.runComparisonBtn.textContent = `Running 1/${rounds}...`;
+    updateStep(`Benchmark running: ${rounds} round(s), profile "${profile}"`, 0);
 
     try {
-        const testData = Array.from(
-            { length: state.size },
-            () => Math.floor(Math.random() * 100) + 1
-        );
-        
-        const result1 = await runAlgorithmForComparison(algo1, [...testData]);
-        const result2 = await runAlgorithmForComparison(algo2, [...testData]);
-        
-        document.getElementById('comp1Comparisons').textContent = result1.comparisons;
-        document.getElementById('comp2Comparisons').textContent = result2.comparisons;
-        document.getElementById('comp1Swaps').textContent = result1.swaps;
-        document.getElementById('comp2Swaps').textContent = result2.swaps;
-        document.getElementById('comp1Time').textContent = result1.time;
-        document.getElementById('comp2Time').textContent = result2.time;
-        
-        let winnerText = 'Tie';
-        if (result1.time !== result2.time) {
-            const winner = result1.time < result2.time ? algorithmDB[algo1]?.name : algorithmDB[algo2]?.name;
-            winnerText = `${winner} (faster)`;
+        const algo1Runs = [];
+        const algo2Runs = [];
+
+        for (let round = 0; round < rounds; round++) {
+            elements.runComparisonBtn.textContent = `Running ${round + 1}/${rounds}...`;
+            updateStep(
+                `Benchmark round ${round + 1}/${rounds}: ${algorithmDB[algo1]?.name || algo1} vs ${algorithmDB[algo2]?.name || algo2}`,
+                ((round + 1) / rounds) * 100
+            );
+
+            const testData = generateArrayValues(state.size, profile);
+            const result1 = await runAlgorithmForComparison(algo1, [...testData]);
+            const result2 = await runAlgorithmForComparison(algo2, [...testData]);
+            algo1Runs.push(result1);
+            algo2Runs.push(result2);
         }
-        document.getElementById('compWinner').textContent = winnerText;
-        
+
+        const summary1 = summarizeBenchmarkRuns(algo1Runs);
+        const summary2 = summarizeBenchmarkRuns(algo2Runs);
+        const winnerText = getComparisonWinner(algo1, algo2, summary1, summary2);
+
+        if (elements.comp1Comparisons) elements.comp1Comparisons.textContent = summary1.comparisons;
+        if (elements.comp2Comparisons) elements.comp2Comparisons.textContent = summary2.comparisons;
+        if (elements.comp1Swaps) elements.comp1Swaps.textContent = summary1.swaps;
+        if (elements.comp2Swaps) elements.comp2Swaps.textContent = summary2.swaps;
+        if (elements.comp1Ops) elements.comp1Ops.textContent = summary1.operations;
+        if (elements.comp2Ops) elements.comp2Ops.textContent = summary2.operations;
+        if (elements.comp1Accesses) elements.comp1Accesses.textContent = summary1.accesses;
+        if (elements.comp2Accesses) elements.comp2Accesses.textContent = summary2.accesses;
+        if (elements.comp1AvgTime) elements.comp1AvgTime.textContent = summary1.avgTime;
+        if (elements.comp2AvgTime) elements.comp2AvgTime.textContent = summary2.avgTime;
+        if (elements.comp1MedianTime) elements.comp1MedianTime.textContent = summary1.medianTime;
+        if (elements.comp2MedianTime) elements.comp2MedianTime.textContent = summary2.medianTime;
+        if (elements.comp1BestTime) elements.comp1BestTime.textContent = summary1.bestTime;
+        if (elements.comp2BestTime) elements.comp2BestTime.textContent = summary2.bestTime;
+        if (elements.compWinner) elements.compWinner.textContent = winnerText;
+
         document.getElementById('comparisonResults').classList.remove('hidden');
+        updateStep(`Benchmark complete. Winner: ${winnerText}`, 100);
     } finally {
         elements.runComparisonBtn.disabled = false;
         elements.runComparisonBtn.textContent = 'Run Comparison';
@@ -9779,6 +10636,8 @@ async function runAlgorithmForComparison(algo, data, options = {}) {
     const startTime = performance.now();
     let comparisons = 0;
     let swaps = 0;
+    let operations = 0;
+    let accesses = 0;
     let output = [];
     
     const arr = data.map(value => ({ value, state: 'default' }));
@@ -9822,6 +10681,8 @@ async function runAlgorithmForComparison(algo, data, options = {}) {
     } finally {
         comparisons = state.comparisons;
         swaps = state.swaps;
+        operations = state.operations;
+        accesses = Math.max(state.accesses, state.comparisons * 2 + state.swaps * 2 + state.operations);
         output = state.array.map(item => item.value);
 
         state.array = savedArray;
@@ -9839,6 +10700,8 @@ async function runAlgorithmForComparison(algo, data, options = {}) {
     return {
         comparisons,
         swaps,
+        operations,
+        accesses,
         time: Math.round(endTime - startTime),
         output: options.returnOutput ? output : undefined
     };

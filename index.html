@@ -44,6 +44,17 @@
                 <label>Speed: <span id="speedValue">50</span></label>
                 <input type="range" id="speedSlider" min="1" max="100" value="50" class="slider">
             </div>
+
+            <div class="control-group">
+                <label>Data Pattern</label>
+                <select id="dataProfileSelect" class="select-control">
+                    <option value="random" selected>Random</option>
+                    <option value="nearly">Nearly Sorted</option>
+                    <option value="reversed">Reverse Sorted</option>
+                    <option value="few-unique">Few Unique</option>
+                    <option value="wave">Wave Pattern</option>
+                </select>
+            </div>
         </div>
         
         <div class="navbar-actions">
@@ -618,6 +629,30 @@ end procedure</pre>
                 <button class="modal-close" aria-label="Close comparison modal" type="button">&times;</button>
             </div>
             <div class="modal-body">
+                <div class="comparison-advanced-controls">
+                    <div class="selector-group">
+                        <label for="comparisonProfile">Dataset Profile</label>
+                        <select id="comparisonProfile" class="select-control">
+                            <option value="random" selected>Random</option>
+                            <option value="nearly">Nearly Sorted</option>
+                            <option value="reversed">Reverse Sorted</option>
+                            <option value="few-unique">Few Unique</option>
+                            <option value="wave">Wave Pattern</option>
+                        </select>
+                    </div>
+                    <div class="selector-group">
+                        <label for="comparisonRounds">Benchmark Rounds</label>
+                        <input
+                            id="comparisonRounds"
+                            class="numeric-control"
+                            type="number"
+                            min="1"
+                            max="20"
+                            value="5"
+                            inputmode="numeric"
+                        >
+                    </div>
+                </div>
                 <div class="comparison-selectors">
                     <div class="selector-group">
                         <label>Algorithm 1</label>
@@ -678,9 +713,29 @@ end procedure</pre>
                                     <td id="comp2Swaps">-</td>
                                 </tr>
                                 <tr>
-                                    <td>Time (ms)</td>
-                                    <td id="comp1Time">-</td>
-                                    <td id="comp2Time">-</td>
+                                    <td>Operations</td>
+                                    <td id="comp1Ops">-</td>
+                                    <td id="comp2Ops">-</td>
+                                </tr>
+                                <tr>
+                                    <td>Accesses</td>
+                                    <td id="comp1Accesses">-</td>
+                                    <td id="comp2Accesses">-</td>
+                                </tr>
+                                <tr>
+                                    <td>Avg Time (ms)</td>
+                                    <td id="comp1AvgTime">-</td>
+                                    <td id="comp2AvgTime">-</td>
+                                </tr>
+                                <tr>
+                                    <td>Median Time (ms)</td>
+                                    <td id="comp1MedianTime">-</td>
+                                    <td id="comp2MedianTime">-</td>
+                                </tr>
+                                <tr>
+                                    <td>Best Time (ms)</td>
+                                    <td id="comp1BestTime">-</td>
+                                    <td id="comp2BestTime">-</td>
                                 </tr>
                                 <tr>
                                     <td>Winner</td>
