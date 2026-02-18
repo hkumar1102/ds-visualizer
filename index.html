@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en" data-theme="dark" data-category-accent="sorting">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -279,6 +279,7 @@
                         <button class="algo-btn" data-algo="matrixchain">Matrix Chain Multiplication</button>
                         <button class="algo-btn" data-algo="coinchange">Coin Change (Min Coins)</button>
                         <button class="algo-btn" data-algo="lis">Longest Increasing Subsequence</button>
+                        <button class="algo-btn" data-algo="kadane">Maximum Subarray (Kadane)</button>
                     </div>
                 </div>
                 
@@ -690,6 +691,12 @@ end procedure</pre>
                     </div>
                 </div>
                 <button id="runComparisonBtn" class="btn btn-primary btn-block">Run Comparison</button>
+                <div id="comparisonStatus" class="comparison-status" aria-live="polite">
+                    Ready. Choose algorithms and run benchmark.
+                </div>
+                <div class="comparison-progress" aria-hidden="true">
+                    <div id="comparisonProgressBar" class="comparison-progress-bar"></div>
+                </div>
                 
                 <div id="comparisonResults" class="comparison-results hidden">
                     <div class="comparison-table">

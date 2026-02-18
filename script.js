@@ -16,6 +16,8 @@ const state = {
     shouldStop: false,
     isBenchmark: false,
     selfTestRunning: false,
+    comparisonRunning: false,
+    comparisonCancelRequested: false,
     
     // Configuration
     size: 50,
@@ -29,6 +31,7 @@ const state = {
     // Current Selection
     category: 'sorting',
     algorithm: 'bubble',
+    activeTab: 'overview',
     
     // Analytics
     comparisons: 0,
@@ -61,10 +64,15 @@ const STORAGE_KEYS = {
     sound: 'dsa_visualizer_sound',
     mode: 'dsa_visualizer_mode',
     quality: 'dsa_visualizer_quality',
-    dataProfile: 'dsa_visualizer_data_profile'
+    dataProfile: 'dsa_visualizer_data_profile',
+    category: 'dsa_visualizer_category',
+    algorithm: 'dsa_visualizer_algorithm',
+    tab: 'dsa_visualizer_tab'
 };
 
 const DATA_PROFILES = new Set(['random', 'nearly', 'reversed', 'few-unique', 'wave']);
+const CATEGORY_SET = new Set(['sorting', 'searching', 'graphs', 'trees', 'dp', 'strings', 'geometry', 'advanced']);
+const PANEL_TAB_SET = new Set(['overview', 'complexity', 'code', 'quiz', 'tests']);
 
 function safeStorageGet(key) {
     try {
@@ -185,6 +193,8 @@ const elements = {
     comparisonModal: document.getElementById('comparisonModal'),
     modalClose: document.querySelector('.modal-close'),
     runComparisonBtn: document.getElementById('runComparisonBtn'),
+    comparisonStatus: document.getElementById('comparisonStatus'),
+    comparisonProgressBar: document.getElementById('comparisonProgressBar'),
     comparisonProfile: document.getElementById('comparisonProfile'),
     comparisonRounds: document.getElementById('comparisonRounds'),
     comp1Comparisons: document.getElementById('comp1Comparisons'),
@@ -213,6 +223,36 @@ const elements = {
     weightedGraph: document.getElementById('weightedGraph')
 };
 
+const CRITICAL_ELEMENT_KEYS = [
+    'categorySelector', 'sizeSlider', 'speedSlider',
+    'generateBtn', 'startBtn', 'pauseBtn', 'stepBtn', 'resetBtn',
+    'themeToggle', 'soundToggle', 'modeToggle', 'qualityToggle',
+    'canvas', 'sidebar', 'rightPanel',
+    'tabButtons', 'tabContents',
+    'comparisonBtn', 'comparisonModal', 'runComparisonBtn'
+];
+
+function validateCriticalElements() {
+    const missing = CRITICAL_ELEMENT_KEYS.filter(key => {
+        const value = elements[key];
+        if (NodeList.prototype.isPrototypeOf(value)) {
+            return value.length === 0;
+        }
+        return !value;
+    });
+
+    if (missing.length === 0) {
+        return true;
+    }
+
+    console.error('Missing critical DOM elements:', missing.join(', '));
+    const fallbackStatus = document.getElementById('stepText');
+    if (fallbackStatus) {
+        fallbackStatus.textContent = `Initialization failed: missing UI elements (${missing.slice(0, 4).join(', ')})`;
+    }
+    return false;
+}
+
 const COPY_BUTTON_DEFAULT = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="4" y="4" width="8" height="8" stroke="currentColor" stroke-width="1.5"/><path d="M2 10V2H10" stroke="currentColor" stroke-width="1.5"/></svg> Copy';
 const COPY_BUTTON_SUCCESS = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 7L6 10L11 3" stroke="currentColor" stroke-width="2"/></svg> Copied!';
 const COPY_BUTTON_ERROR = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3 3L11 11M11 3L3 11" stroke="currentColor" stroke-width="2"/></svg> Copy Failed';
@@ -228,7 +268,7 @@ const treeAlgorithms = new Set([
 ]);
 
 const dpTableAlgorithms = new Set([
-    'fibonacci', 'knapsack', 'lcs', 'editdist', 'matrixchain', 'coinchange', 'lis', 'subsetsum', 'floyd'
+    'fibonacci', 'knapsack', 'lcs', 'editdist', 'matrixchain', 'coinchange', 'lis', 'kadane', 'subsetsum', 'floyd'
 ]);
 
 function isGraphAlgorithm(algo = state.algorithm) {
@@ -392,16 +432,60 @@ function syncNavbarHeight() {
     }
 }
 
-function switchPanelTab(tabId) {
+function sanitizeCategory(value) {
+    return CATEGORY_SET.has(value) ? value : 'sorting';
+}
+
+function sanitizePanelTab(value) {
+    return PANEL_TAB_SET.has(value) ? value : 'overview';
+}
+
+function applyCategoryAccent(category = state.category) {
+    const nextCategory = sanitizeCategory(category);
+    document.documentElement.setAttribute('data-category-accent', nextCategory);
+}
+
+function getFirstAlgorithmForCategory(category) {
+    const matched = Array.from(elements.algoButtons).find(btn =>
+        btn.closest('.algo-category')?.dataset.category === category
+    );
+    return matched?.dataset.algo || 'bubble';
+}
+
+function syncActiveAlgorithmButton() {
+    let activeButton = Array.from(elements.algoButtons).find(btn =>
+        btn.dataset.algo === state.algorithm
+        && btn.closest('.algo-category')?.dataset.category === state.category
+    );
+
+    if (!activeButton) {
+        state.algorithm = getFirstAlgorithmForCategory(state.category);
+        activeButton = Array.from(elements.algoButtons).find(btn => btn.dataset.algo === state.algorithm);
+    }
+
+    if (activeButton) {
+        elements.algoButtons.forEach(btn => btn.classList.remove('active'));
+        activeButton.classList.add('active');
+        safeStorageSet(STORAGE_KEYS.algorithm, state.algorithm);
+    }
+}
+
+function switchPanelTab(tabId, persist = true) {
     if (!tabId) return;
+    const nextTab = sanitizePanelTab(tabId);
 
     elements.tabButtons.forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === tabId);
+        btn.classList.toggle('active', btn.dataset.tab === nextTab);
     });
 
     elements.tabContents.forEach(content => {
-        content.classList.toggle('active', content.dataset.tab === tabId);
+        content.classList.toggle('active', content.dataset.tab === nextTab);
     });
+
+    state.activeTab = nextTab;
+    if (persist) {
+        safeStorageSet(STORAGE_KEYS.tab, nextTab);
+    }
 }
 
 function applyTheme(theme, persist = true) {
@@ -431,6 +515,17 @@ function initializePreferences() {
 
     const storedProfile = safeStorageGet(STORAGE_KEYS.dataProfile);
     state.dataProfile = DATA_PROFILES.has(storedProfile) ? storedProfile : 'random';
+
+    const storedCategory = safeStorageGet(STORAGE_KEYS.category);
+    state.category = sanitizeCategory(storedCategory || state.category);
+
+    const storedAlgorithm = safeStorageGet(STORAGE_KEYS.algorithm);
+    if (storedAlgorithm && Object.prototype.hasOwnProperty.call(algorithmDB, storedAlgorithm)) {
+        state.algorithm = storedAlgorithm;
+    }
+
+    const storedTab = safeStorageGet(STORAGE_KEYS.tab);
+    state.activeTab = sanitizePanelTab(storedTab || state.activeTab);
 }
 
 function syncPreferenceControls() {
@@ -467,6 +562,10 @@ function syncPreferenceControls() {
 
     if (elements.comparisonProfile) {
         elements.comparisonProfile.value = state.dataProfile;
+    }
+
+    if (elements.categorySelector) {
+        elements.categorySelector.value = state.category;
     }
 
     if (elements.rightPanel && state.interviewMode) {
@@ -2201,6 +2300,55 @@ end procedure`
     reconstruct best sequence from prev
 end procedure`
     },
+
+    kadane: {
+        name: 'Maximum Subarray (Kadane\'s Algorithm)',
+        description: 'Kadane\'s algorithm finds the contiguous subarray with the largest sum in linear time by tracking the best sum ending at each index.',
+        complexity: { best: 'O(n)', average: 'O(n)', worst: 'O(n)', space: 'O(1)' },
+        steps: ['Initialize current and best with first element', 'For each value, choose extend vs restart', 'Update global best', 'Return max sum with range'],
+        useCases: ['Profit/loss window analysis', 'Signal processing', 'Streaming analytics', 'Interview DP optimization'],
+        characteristics: [
+            '<strong>Type:</strong> Greedy + dynamic programming insight',
+            '<strong>Optimal:</strong> Linear scan over array',
+            '<strong>Output:</strong> Maximum sum and subarray bounds'
+        ],
+        code: `function kadane(nums) {
+    if (!nums.length) return { maxSum: 0, start: -1, end: -1 };
+
+    let bestSum = nums[0];
+    let currentSum = nums[0];
+    let bestStart = 0;
+    let bestEnd = 0;
+    let currentStart = 0;
+
+    for (let i = 1; i < nums.length; i++) {
+        if (currentSum + nums[i] < nums[i]) {
+            currentSum = nums[i];
+            currentStart = i;
+        } else {
+            currentSum += nums[i];
+        }
+
+        if (currentSum > bestSum) {
+            bestSum = currentSum;
+            bestStart = currentStart;
+            bestEnd = i;
+        }
+    }
+
+    return { maxSum: bestSum, start: bestStart, end: bestEnd };
+}`,
+        pseudocode: `procedure kadane(A)
+    if A is empty then return 0
+    current = A[0]
+    best = A[0]
+    for i = 1 to n-1 do
+        current = max(A[i], current + A[i])
+        best = max(best, current)
+    end for
+    return best
+end procedure`
+    },
     
     // === String Algorithms ===
     
@@ -2667,8 +2815,19 @@ end procedure`
 
 // === Initialization ===
 function init() {
+    if (!validateCriticalElements()) {
+        return;
+    }
+
     initializePreferences();
     syncPreferenceControls();
+    applyCategoryAccent(state.category);
+
+    syncActiveAlgorithmButton();
+    if (elements.categorySelector) {
+        elements.categorySelector.value = state.category;
+    }
+    switchPanelTab(state.activeTab, false);
 
     if (isMobileViewport()) {
         elements.sidebar.classList.add('collapsed');
@@ -2684,7 +2843,7 @@ function init() {
     setupEventListeners();
     setupAudioUnlock();
     updateDrawerLayout();
-    updateVisibleAlgorithmList(false);
+    updateVisibleAlgorithmList(true);
     showVisualizationContainer();
     prepareDataForCurrentAlgorithm(true);
     updateAlgorithmInfo();
@@ -2692,6 +2851,8 @@ function init() {
     loadQuiz();
     setSelfTestStatus('Idle. Run tests to verify algorithm integrity.', 'idle');
     updateSelfTestSummary(0, 0, 0);
+    setComparisonStatus('Ready. Choose algorithms and run benchmark.', 'idle');
+    setComparisonProgress(0);
 
     window.addEventListener('resize', () => {
         syncNavbarHeight();
@@ -2984,6 +3145,16 @@ function renderDPPreview() {
                     [1, 2, 1, 3, 2, 4, 4, 5]
                 ],
                 ['Values', 'LIS Lengths Preview']
+            );
+            break;
+        case 'kadane':
+            drawDPTable(
+                [
+                    [-2, 1, -3, 4, -1, 2, 1, -5, 4],
+                    [-2, 1, -2, 4, 3, 5, 6, 1, 5],
+                    [-2, 1, 1, 4, 4, 5, 6, 6, 6]
+                ],
+                ['Values', 'Current Max Ending Here', 'Best Max So Far']
             );
             break;
         case 'subsetsum':
@@ -6628,6 +6799,59 @@ async function lisVisualization() {
     updateStep(`LIS complete! Length ${bestLen}, sequence: ${sequence.join(' -> ')}`);
 }
 
+async function kadaneVisualization() {
+    const n = Math.min(18, Math.max(9, Math.floor(state.size / 7)));
+    const values = Array.from({ length: n }, () => Math.floor(Math.random() * 31) - 15);
+
+    let currentSum = values[0];
+    let bestSum = values[0];
+    let bestStart = 0;
+    let bestEnd = 0;
+    let currentStart = 0;
+
+    const currentRow = new Array(n).fill('-');
+    const bestRow = new Array(n).fill('-');
+    currentRow[0] = currentSum;
+    bestRow[0] = bestSum;
+
+    updateStep(`Kadane: values [${values.join(', ')}]`);
+    drawDPTable([values, currentRow, bestRow], ['Values', 'Current Sum', 'Best Sum'], n);
+    await delay();
+
+    for (let i = 1; i < n; i++) {
+        const extend = currentSum + values[i];
+        const restart = values[i];
+        state.comparisons++;
+
+        if (restart > extend) {
+            currentSum = restart;
+            currentStart = i;
+            updateStep(`i=${i}: restart at ${values[i]} (better than extend ${extend})`);
+        } else {
+            currentSum = extend;
+            updateStep(`i=${i}: extend subarray, current=${currentSum}`);
+        }
+
+        if (currentSum > bestSum) {
+            bestSum = currentSum;
+            bestStart = currentStart;
+            bestEnd = i;
+            playSound(40 + Math.min(60, Math.abs(bestSum)));
+            updateStep(`New best sum ${bestSum} for range [${bestStart}, ${bestEnd}]`);
+        }
+
+        currentRow[i] = currentSum;
+        bestRow[i] = bestSum;
+        state.operations += 2;
+        updateAnalytics();
+        drawDPTable([values, currentRow, bestRow], ['Values', 'Current Sum', 'Best Sum'], n + i);
+        await delay();
+    }
+
+    const bestSubarray = values.slice(bestStart, bestEnd + 1);
+    updateStep(`Kadane complete! Max sum ${bestSum}, subarray: [${bestSubarray.join(', ')}]`);
+}
+
 // === String Algorithms ===
 
 function drawStringMatchingState(
@@ -8039,6 +8263,7 @@ async function executeAlgorithm() {
             case 'matrixchain': await matrixChainVisualization(); break;
             case 'coinchange': await coinChangeVisualization(); break;
             case 'lis': await lisVisualization(); break;
+            case 'kadane': await kadaneVisualization(); break;
             
             // String Algorithms
             case 'kmp': await kmpPatternMatching(); break;
@@ -8539,6 +8764,12 @@ const quizQuestions = [
         correct: 0
     },
     {
+        algo: 'kadane',
+        question: 'Kadane\'s algorithm tracks:',
+        options: ['Best subarray sum ending at each position', 'All subset sums', 'Only positive numbers', 'Two sorted halves'],
+        correct: 0
+    },
+    {
         algo: 'boyermoore',
         question: 'Boyer-Moore (bad character rule) compares pattern characters:',
         options: ['From right to left', 'From left to right', 'Randomly', 'In parallel halves'],
@@ -8857,6 +9088,33 @@ function lisLengthPure(nums) {
         best = Math.max(best, dp[i]);
     }
     return best;
+}
+
+function kadanePure(nums) {
+    if (!nums.length) return { maxSum: 0, start: -1, end: -1 };
+
+    let currentSum = nums[0];
+    let bestSum = nums[0];
+    let currentStart = 0;
+    let bestStart = 0;
+    let bestEnd = 0;
+
+    for (let i = 1; i < nums.length; i++) {
+        if (currentSum + nums[i] < nums[i]) {
+            currentSum = nums[i];
+            currentStart = i;
+        } else {
+            currentSum += nums[i];
+        }
+
+        if (currentSum > bestSum) {
+            bestSum = currentSum;
+            bestStart = currentStart;
+            bestEnd = i;
+        }
+    }
+
+    return { maxSum: bestSum, start: bestStart, end: bestEnd };
 }
 
 function subsetSumPure(nums, target) {
@@ -9892,6 +10150,16 @@ function getSelfTestCases() {
             }
         },
         {
+            name: 'DP: Kadane maximum subarray',
+            run: () => {
+                const values = [-2, 1, -3, 4, -1, 2, 1, -5, 4];
+                const result = kadanePure(values);
+                expectEqual(result.maxSum, 6, 'Kadane max sum mismatch');
+                expectArrayEqual(values.slice(result.start, result.end + 1), [4, -1, 2, 1], 'Kadane range mismatch');
+                return `maxSum=${result.maxSum}, range=[${result.start},${result.end}]`;
+            }
+        },
+        {
             name: 'DP: Subset Sum reachability',
             run: () => {
                 expect(subsetSumPure([3, 34, 4, 12, 5, 2], 9), 'Subset Sum should find target 9');
@@ -10032,6 +10300,12 @@ async function runSelfTests() {
         return;
     }
 
+    if (state.comparisonRunning) {
+        setSelfTestStatus('Stop comparison benchmark before running self-tests.', 'fail');
+        updateStep('Self-tests blocked: comparison benchmark is running.');
+        return;
+    }
+
     if (state.isRunning) {
         setSelfTestStatus('Stop the active visualization before running self-tests.', 'fail');
         updateStep('Self-tests blocked: stop current visualization first.');
@@ -10153,7 +10427,16 @@ function setupEventListeners() {
     
     // Category selector
     elements.categorySelector.addEventListener('change', (e) => {
-        state.category = e.target.value;
+        state.category = sanitizeCategory(e.target.value);
+        state.algorithm = getFirstAlgorithmForCategory(state.category);
+        safeStorageSet(STORAGE_KEYS.category, state.category);
+        safeStorageSet(STORAGE_KEYS.algorithm, state.algorithm);
+        applyCategoryAccent(state.category);
+        syncActiveAlgorithmButton();
+        updateAlgorithmInfo();
+        loadQuiz();
+        showVisualizationContainer();
+        prepareDataForCurrentAlgorithm(true);
         updateVisibleAlgorithmList(true);
     });
 
@@ -10178,6 +10461,13 @@ function setupEventListeners() {
             elements.algoButtons.forEach(b => b.classList.remove('active'));
             btn.classList.add('active');
             state.algorithm = btn.dataset.algo;
+            state.category = sanitizeCategory(btn.closest('.algo-category')?.dataset.category || state.category);
+            safeStorageSet(STORAGE_KEYS.algorithm, state.algorithm);
+            safeStorageSet(STORAGE_KEYS.category, state.category);
+            if (elements.categorySelector) {
+                elements.categorySelector.value = state.category;
+            }
+            applyCategoryAccent(state.category);
             updateAlgorithmInfo();
             loadQuiz();
             resetAnalytics();
@@ -10196,6 +10486,10 @@ function setupEventListeners() {
             updateStep('Self-tests are running. Please wait...');
             return;
         }
+        if (state.comparisonRunning) {
+            updateStep('Comparison benchmark is running. Please wait...');
+            return;
+        }
         if (!state.isRunning) {
             prepareDataForCurrentAlgorithm(true);
         }
@@ -10205,6 +10499,10 @@ function setupEventListeners() {
         if (state.isRunning) return;
         if (state.selfTestRunning) {
             updateStep('Self-tests are running. Please wait...');
+            return;
+        }
+        if (state.comparisonRunning) {
+            updateStep('Comparison benchmark is running. Please wait...');
             return;
         }
 
@@ -10248,6 +10546,10 @@ function setupEventListeners() {
     });
     
     elements.resetBtn.addEventListener('click', () => {
+        if (state.comparisonRunning) {
+            updateStep('Comparison benchmark is running. Please wait...');
+            return;
+        }
         state.shouldStop = true;
         state.isRunning = false;
         state.isPaused = false;
@@ -10367,6 +10669,10 @@ function setupEventListeners() {
     elements.comparisonBtn.addEventListener('click', () => {
         if (elements.comparisonProfile) {
             elements.comparisonProfile.value = state.dataProfile;
+        }
+        if (!state.comparisonRunning) {
+            setComparisonStatus('Ready. Choose algorithms and run benchmark.', 'idle');
+            setComparisonProgress(0);
         }
         elements.comparisonModal.classList.add('active');
     });
@@ -10571,19 +10877,114 @@ function getComparisonWinner(algo1, algo2, summary1, summary2) {
     return 'Tie (metrics are equivalent)';
 }
 
+function resetComparisonOutputs() {
+    const ids = [
+        'comp1Comparisons', 'comp2Comparisons',
+        'comp1Swaps', 'comp2Swaps',
+        'comp1Ops', 'comp2Ops',
+        'comp1Accesses', 'comp2Accesses',
+        'comp1AvgTime', 'comp2AvgTime',
+        'comp1MedianTime', 'comp2MedianTime',
+        'comp1BestTime', 'comp2BestTime'
+    ];
+
+    ids.forEach(id => {
+        const cell = document.getElementById(id);
+        if (cell) cell.textContent = '-';
+    });
+    if (elements.compWinner) {
+        elements.compWinner.textContent = '-';
+        elements.compWinner.classList.remove('error');
+    }
+}
+
+function setComparisonStatus(message, tone = 'idle') {
+    if (!elements.comparisonStatus) return;
+    elements.comparisonStatus.textContent = message;
+    elements.comparisonStatus.className = `comparison-status ${tone}`;
+}
+
+function setComparisonProgress(percent = 0) {
+    if (!elements.comparisonProgressBar) return;
+    const bounded = clampNumber(percent, 0, 100);
+    elements.comparisonProgressBar.style.width = `${bounded}%`;
+}
+
+function setComparisonError(message) {
+    resetComparisonOutputs();
+    if (elements.compWinner) {
+        elements.compWinner.textContent = `Error: ${message}`;
+        elements.compWinner.classList.add('error');
+    }
+    const resultBox = document.getElementById('comparisonResults');
+    if (resultBox) {
+        resultBox.classList.remove('hidden');
+    }
+    setComparisonStatus(`Error: ${message}`, 'error');
+    setComparisonProgress(0);
+    updateStep(`Comparison error: ${message}`);
+}
+
+function isComparisonEligible(algoId) {
+    return [
+        'bubble', 'selection', 'insertion', 'merge', 'quick', 'heap',
+        'counting', 'radix', 'shell', 'timsort', 'cocktail', 'bucket'
+    ].includes(algoId);
+}
+
 async function runComparison() {
-    const algo1 = document.getElementById('algo1Select').value;
-    const algo2 = document.getElementById('algo2Select').value;
+    if (state.comparisonRunning) {
+        state.comparisonCancelRequested = true;
+        setComparisonStatus('Cancel requested. Finishing current round...', 'cancelled');
+        updateStep('Comparison cancel requested.');
+        return;
+    }
+
+    if (state.isRunning) {
+        setComparisonError('Stop the active visualization first.');
+        return;
+    }
+    if (state.selfTestRunning) {
+        setComparisonError('Wait for self-tests to finish.');
+        return;
+    }
+
+    const algo1Select = document.getElementById('algo1Select');
+    const algo2Select = document.getElementById('algo2Select');
+    if (!algo1Select || !algo2Select) {
+        setComparisonError('Comparison selectors are missing in the page.');
+        return;
+    }
+
+    const algo1 = algo1Select.value;
+    const algo2 = algo2Select.value;
+    if (!isComparisonEligible(algo1) || !isComparisonEligible(algo2)) {
+        setComparisonError('Only sorting algorithms are supported in comparison mode.');
+        return;
+    }
+
     const profile = DATA_PROFILES.has(elements.comparisonProfile?.value)
         ? elements.comparisonProfile.value
         : state.dataProfile;
-    const rounds = clampNumber(parseInt(elements.comparisonRounds?.value, 10) || 5, 1, 20);
+    const rounds = Math.round(clampNumber(parseInt(elements.comparisonRounds?.value, 10) || 5, 1, 20));
     
-    document.getElementById('algo1Name').textContent = algorithmDB[algo1]?.name || algo1;
-    document.getElementById('algo2Name').textContent = algorithmDB[algo2]?.name || algo2;
+    const algo1NameCell = document.getElementById('algo1Name');
+    const algo2NameCell = document.getElementById('algo2Name');
+    if (algo1NameCell) algo1NameCell.textContent = algorithmDB[algo1]?.name || algo1;
+    if (algo2NameCell) algo2NameCell.textContent = algorithmDB[algo2]?.name || algo2;
     
-    elements.runComparisonBtn.disabled = true;
-    elements.runComparisonBtn.textContent = `Running 1/${rounds}...`;
+    const comparisonResults = document.getElementById('comparisonResults');
+    if (comparisonResults) {
+        comparisonResults.classList.add('hidden');
+    }
+
+    resetComparisonOutputs();
+    state.comparisonRunning = true;
+    state.comparisonCancelRequested = false;
+    elements.runComparisonBtn.disabled = false;
+    elements.runComparisonBtn.textContent = 'Cancel';
+    setComparisonStatus(`Running ${rounds} benchmark round(s) on "${profile}" profile...`, 'running');
+    setComparisonProgress(0);
     updateStep(`Benchmark running: ${rounds} round(s), profile "${profile}"`, 0);
 
     try {
@@ -10591,7 +10992,12 @@ async function runComparison() {
         const algo2Runs = [];
 
         for (let round = 0; round < rounds; round++) {
-            elements.runComparisonBtn.textContent = `Running ${round + 1}/${rounds}...`;
+            if (state.comparisonCancelRequested) {
+                throw new Error('Comparison canceled by user.');
+            }
+
+            setComparisonStatus(`Round ${round + 1}/${rounds}: running ${algorithmDB[algo1]?.name || algo1} vs ${algorithmDB[algo2]?.name || algo2}`, 'running');
+            setComparisonProgress((round / rounds) * 100);
             updateStep(
                 `Benchmark round ${round + 1}/${rounds}: ${algorithmDB[algo1]?.name || algo1} vs ${algorithmDB[algo2]?.name || algo2}`,
                 ((round + 1) / rounds) * 100
@@ -10600,8 +11006,20 @@ async function runComparison() {
             const testData = generateArrayValues(state.size, profile);
             const result1 = await runAlgorithmForComparison(algo1, [...testData]);
             const result2 = await runAlgorithmForComparison(algo2, [...testData]);
+
+            if (result1.failed || result2.failed) {
+                const reason = result1.error || result2.error || 'Unknown execution failure';
+                throw new Error(reason);
+            }
+            if (state.comparisonCancelRequested) {
+                throw new Error('Comparison canceled by user.');
+            }
             algo1Runs.push(result1);
             algo2Runs.push(result2);
+            setComparisonProgress(((round + 1) / rounds) * 100);
+
+            // Keep UI responsive on slower devices during multi-round benchmarks.
+            await new Promise(resolve => requestAnimationFrame(resolve));
         }
 
         const summary1 = summarizeBenchmarkRuns(algo1Runs);
@@ -10622,11 +11040,30 @@ async function runComparison() {
         if (elements.comp2MedianTime) elements.comp2MedianTime.textContent = summary2.medianTime;
         if (elements.comp1BestTime) elements.comp1BestTime.textContent = summary1.bestTime;
         if (elements.comp2BestTime) elements.comp2BestTime.textContent = summary2.bestTime;
-        if (elements.compWinner) elements.compWinner.textContent = winnerText;
+        if (elements.compWinner) {
+            elements.compWinner.textContent = winnerText;
+            elements.compWinner.classList.remove('error');
+        }
 
-        document.getElementById('comparisonResults').classList.remove('hidden');
+        if (comparisonResults) {
+            comparisonResults.classList.remove('hidden');
+        }
+        setComparisonStatus(`Benchmark complete. Winner: ${winnerText}`, 'success');
+        setComparisonProgress(100);
         updateStep(`Benchmark complete. Winner: ${winnerText}`, 100);
+    } catch (error) {
+        console.error('Comparison failed:', error);
+        const reason = error && error.message ? error.message : 'Unexpected runtime issue';
+        if (reason === 'Comparison canceled by user.') {
+            setComparisonStatus('Comparison canceled. You can run again anytime.', 'cancelled');
+            setComparisonProgress(0);
+            updateStep('Comparison canceled.');
+        } else {
+            setComparisonError(reason);
+        }
     } finally {
+        state.comparisonRunning = false;
+        state.comparisonCancelRequested = false;
         elements.runComparisonBtn.disabled = false;
         elements.runComparisonBtn.textContent = 'Run Comparison';
     }
@@ -10638,6 +11075,8 @@ async function runAlgorithmForComparison(algo, data, options = {}) {
     let swaps = 0;
     let operations = 0;
     let accesses = 0;
+    let failed = false;
+    let error = '';
     let output = [];
     
     const arr = data.map(value => ({ value, state: 'default' }));
@@ -10677,7 +11116,8 @@ async function runAlgorithmForComparison(algo, data, options = {}) {
             default: break;
         }
     } catch (e) {
-        // Ignore
+        failed = true;
+        error = e && e.message ? e.message : 'Unknown algorithm failure';
     } finally {
         comparisons = state.comparisons;
         swaps = state.swaps;
@@ -10703,6 +11143,8 @@ async function runAlgorithmForComparison(algo, data, options = {}) {
         operations,
         accesses,
         time: Math.round(endTime - startTime),
+        failed,
+        error,
         output: options.returnOutput ? output : undefined
     };
 }
